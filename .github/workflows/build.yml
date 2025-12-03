@@ -80,6 +80,10 @@ jobs:
           if ($rcc) { Add-Content -Path $env:GITHUB_ENV -Value "QT_RCC_EXECUTABLE=$rcc" }
           if ($qtBin) { $env:PATH = "$qtBin;$env:PATH" }
 
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Ensure build tools (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
