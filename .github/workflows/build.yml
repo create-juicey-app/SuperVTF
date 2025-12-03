@@ -45,20 +45,39 @@ jobs:
 
       - name: Install Qt (Windows)
         if: runner.os == 'Windows'
+        uses: qt-actions/setup-qt@v2
+        with:
+          version: 6.6.4
+
+      - name: Set QT env variables (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Install a Qt 6 package via Chocolatey. Adjust version if you want a different Qt version
-          choco install qt --version=6.6.4 -y
-          refreshenv
-          $QtRoot = Get-ChildItem 'C:\Qt' -Directory | Sort-Object Name -Descending | Select-Object -First 1
-          $msvcDir = Get-ChildItem $QtRoot.FullName -Directory | Where-Object { $_.Name -match 'msvc' } | Select-Object -First 1
-          $QtBin = Join-Path $msvcDir.FullName 'bin'
-          Write-Host "QT_BIN = $QtBin"
-          Add-Content -Path $env:GITHUB_ENV -Value "QT_BIN=$QtBin"
-          Add-Content -Path $env:GITHUB_ENV -Value "QT_QMAKE_EXECUTABLE=$QtBin\qmake.exe"
-          Add-Content -Path $env:GITHUB_ENV -Value "QT_RCC_EXECUTABLE=$QtBin\rcc.exe"
-          # Put Qt bin on PATH so cargo build can pick up qmake/rcc if needed
-          $env:PATH = "$QtBin;$env:PATH"
+          # Prefer a command lookup first (should be in PATH after setup-qt), otherwise attempt to probe common install locations
+          $qmake = (Get-Command qmake.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source) -ne $null ? (Get-Command qmake.exe -ErrorAction SilentlyContinue).Source : $null
+          if (-not $qmake) {
+            # Common locations where setup-qt installs may put qmake
+            $possible = @('C:\Qt', 'C:\HostedToolCache\windows\Qt')
+            foreach ($p in $possible) {
+              $found = Get-ChildItem $p -Directory -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem $_.FullName -Directory -ErrorAction SilentlyContinue } | ForEach-Object { Get-ChildItem ($_ | Select-Object -ExpandProperty FullName) -Filter 'qmake.exe' -Recurse -ErrorAction SilentlyContinue } | Select-Object -First 1
+              if ($found) { $qmake = $found.FullName; break }
+            }
+          }
+          $rcc = (Get-Command rcc.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source) -ne $null ? (Get-Command rcc.exe -ErrorAction SilentlyContinue).Source : $null
+          if (-not $rcc) {
+            $rcc = (Get-Command qt6-rcc.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source) -ne $null ? (Get-Command qt6-rcc.exe -ErrorAction SilentlyContinue).Source : $null
+          }
+          if (-not $qmake -or -not $rcc) {
+            Write-Host "Warning: qmake or rcc not found in PATH. qmake=$qmake rcc=$rcc"
+          }
+          # Resolve bin directory and set env vars used by build.rs (cxx-qt-build)
+          if ($qmake) {
+            $qtBin = Split-Path -Path $qmake -Parent
+            Add-Content -Path $env:GITHUB_ENV -Value "QT_BIN=$qtBin"
+            Add-Content -Path $env:GITHUB_ENV -Value "QT_QMAKE_EXECUTABLE=$qmake"
+          }
+          if ($rcc) { Add-Content -Path $env:GITHUB_ENV -Value "QT_RCC_EXECUTABLE=$rcc" }
+          if ($qtBin) { $env:PATH = "$qtBin;$env:PATH" }
 
       - name: Ensure build tools (Windows)
         if: runner.os == 'Windows'
