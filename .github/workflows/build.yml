@@ -1,0 +1,117 @@
+name: CI - Build Linux & Windows
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: clippy, rustfmt
+          override: true
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-declarative-dev cmake ninja-build pkg-config
+          # Ensure qmake/rcc executables are exported for `cxx-qt-build`
+          if command -v qmake-qt6 >/dev/null 2>&1; then echo "QT_QMAKE_EXECUTABLE=$(which qmake-qt6)" >> $GITHUB_ENV; elif command -v qmake >/dev/null 2>&1; then echo "QT_QMAKE_EXECUTABLE=$(which qmake)" >> $GITHUB_ENV; fi
+          if command -v rcc >/dev/null 2>&1; then echo "QT_RCC_EXECUTABLE=$(which rcc)" >> $GITHUB_ENV; elif command -v rcc-qt6 >/dev/null 2>&1; then echo "QT_RCC_EXECUTABLE=$(which rcc-qt6)" >> $GITHUB_ENV; fi
+
+      - name: Install Qt (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Install a Qt 6 package via Chocolatey. Adjust version if you want a different Qt version
+          choco install qt --version=6.6.4 -y
+          refreshenv
+          $QtRoot = Get-ChildItem 'C:\Qt' -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          $msvcDir = Get-ChildItem $QtRoot.FullName -Directory | Where-Object { $_.Name -match 'msvc' } | Select-Object -First 1
+          $QtBin = Join-Path $msvcDir.FullName 'bin'
+          Write-Host "QT_BIN = $QtBin"
+          Add-Content -Path $env:GITHUB_ENV -Value "QT_BIN=$QtBin"
+          Add-Content -Path $env:GITHUB_ENV -Value "QT_QMAKE_EXECUTABLE=$QtBin\qmake.exe"
+          Add-Content -Path $env:GITHUB_ENV -Value "QT_RCC_EXECUTABLE=$QtBin\rcc.exe"
+          # Put Qt bin on PATH so cargo build can pick up qmake/rcc if needed
+          $env:PATH = "$QtBin;$env:PATH"
+
+      - name: Ensure build tools (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Visual Studio & MSVC are preinstalled on windows-latest; make sure cl is available
+          cl.exe /?
+
+      - name: Set QT env variables (Linux fallback)
+        if: runner.os == 'Linux'
+        run: |
+          # Debug output of QT variables
+          echo "QT_QMAKE_EXECUTABLE=$QT_QMAKE_EXECUTABLE"
+          echo "QT_RCC_EXECUTABLE=$QT_RCC_EXECUTABLE"
+
+      - name: Build (release)
+        run: |
+          # On Windows this uses MSVC toolchain; on Linux the system gcc toolchain
+          cargo build --release
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p artifact
+          cp target/release/supervtf artifact/
+          # Include QML + media resources (app expects them at runtime)
+          cp -r qml media resources.qrc artifact/ || true
+          tar -czf supervtf-linux.tar.gz -C artifact .
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "target\release\supervtf.exe"
+          $QtBin = $env:QT_BIN
+          if (-not (Test-Path $exe)) { throw "Executable not found: $exe" }
+          # Use windeployqt to gather required Qt DLLs and plugins in `artifact` directory
+          & "$QtBin\windeployqt.exe" --dir artifact $exe
+          # Also copy the exe itself to artifact
+          Copy-Item $exe -Destination artifact
+          # Create zip for artifact upload
+          Compress-Archive -Path artifact\* -DestinationPath supervtf-windows.zip -Force
+
+      - name: Upload artifact (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supervtf-linux
+          path: supervtf-linux.tar.gz
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: supervtf-windows
+          path: supervtf-windows.zip
