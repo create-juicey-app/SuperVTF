@@ -144,9 +144,9 @@ jobs:
           if (-not (Test-Path $windeploy)) { 
             Write-Host "windeployqt not found: $windeploy" 
           } else { 
-            # Exclude translations and other extras to save space
+            # Explicitly deploy the 'platforms' plugin and be verbose to help debug
             # Added --qmldir qml so windeployqt scans imports and copies QtQuick/Controls modules
-            & $windeploy --dir artifact --qmldir qml --no-translations --no-compiler-runtime --no-system-d3d-compiler --no-opengl-sw $exe 
+            & $windeploy --dir artifact --qmldir qml --plugins platforms --no-translations --no-compiler-runtime --no-system-d3d-compiler --no-opengl-sw --verbose $exe 
           }
           
           # Copy the main executable
@@ -155,6 +155,36 @@ jobs:
           # Remove heavy files if they exist (software rasterizer is often 20MB+)
           if (Test-Path "artifact\opengl32sw.dll") { Remove-Item "artifact\opengl32sw.dll" }
           
+          # If windeployqt didn't copy the 'platforms' plugin, try to copy it directly
+          $platformsDest = Join-Path (Resolve-Path artifact) "platforms"
+          if (-not (Test-Path (Join-Path $platformsDest 'qwindows.dll'))) {
+            # Try to find Qt's plugin path by probing $QT_BIN\..\plugins\platforms or common install locations
+            $possiblePaths = @(
+              (Join-Path $QtBin '..\plugins\platforms'),
+              "C:\Qt\6.6.3\msvc2019_64\plugins\platforms",
+              "C:\Qt\6.6.3\msvc2019_64\qtbase\plugins\platforms",
+              "C:\HostedToolCache\windows\Qt\6.6.3\msvc2019_64\plugins\platforms"
+            )
+            $foundPlatform = $null
+            foreach ($p in $possiblePaths) {
+              $pAbs = Resolve-Path -LiteralPath $p -ErrorAction SilentlyContinue
+              if ($pAbs -and (Test-Path (Join-Path $pAbs 'qwindows.dll'))) { $foundPlatform = $pAbs; break }
+            }
+            if ($foundPlatform) {
+              Write-Host "Copying platform plugin from $foundPlatform to artifact/platforms"
+              New-Item -ItemType Directory -Force -Path $platformsDest | Out-Null
+              Copy-Item (Join-Path $foundPlatform 'qwindows.dll') -Destination $platformsDest -Force
+            } else {
+              Write-Host "Warning: platform plugin qwindows.dll not found in known Qt plugin paths: $possiblePaths"
+            }
+          }
+
+          # Verify we have 'platforms/qwindows.dll' in artifact; fail the job if not found
+          if (-not (Test-Path (Join-Path $platformsDest 'qwindows.dll'))) {
+            Write-Host "ERROR: artifact/platforms/qwindows.dll not found. The app will fail with 'Could not find the Qt platform plugin \"windows\"'"
+            throw "Missing Qt platform plugin: qwindows.dll"
+          }
+
           # Compress EXE and DLLs with UPX
           Get-ChildItem artifact -Include *.exe,*.dll -Recurse | ForEach-Object {
             Write-Host "Compressing $($_.Name)..."
@@ -178,13 +208,15 @@ jobs:
           # Create SFX config for SILENT auto-extraction and run
           $configLines = @(
             ';!@Install@!UTF-8!',
-            'Title="SuperVTF"',
-            'GUIMode="2"',
-            'InstallPath="%TEMP%\SuperVTF"',
-            'RunProgram="supervtf.exe"',
+            'Title="SuperVTF"',       # Title doesn't matter if GUI disabled
+            'GUIMode="2"',            # FULLY silent, no windows, no progress bar
+            'InstallPath="C:\\tmp"',  # FORCE extraction path
+            'OverwriteMode="2"',      # Overwrite without asking (important for silent)
+            'RunProgram="supervtf.exe"', # Command to run after extraction
             ';!@InstallEnd@!'
           )
           $configLines -join "`r`n" | Set-Content -Path config.txt -NoNewline
+
           
           # Combine to create the single EXE
           cmd /c "copy /b `"$sfxModule`" + config.txt + payload.7z supervtf-portable.exe"
