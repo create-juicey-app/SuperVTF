@@ -146,7 +146,7 @@ jobs:
           # Compress EXE and DLLs with UPX
           Get-ChildItem artifact -Include *.exe,*.dll -Recurse | ForEach-Object {
             Write-Host "Compressing $($_.Name)..."
-            upx --best --lzma $_.FullName
+            upx --best --lzma --force $_.FullName
           }
 
           # Create SFX (Single Executable)
@@ -179,8 +179,7 @@ jobs:
           # cmd /c copy /b 7z.sfx + config.txt + payload.7z supervtf-portable.exe
           cmd /c "copy /b `"$sfxModule`" + config.txt + payload.7z supervtf-portable.exe"
           
-          # Upload the single EXE
-          Copy-Item supervtf-portable.exe -Destination .
+          # (File is already in current directory, ready for upload)
 
       - name: Upload artifact (Linux)
         if: runner.os == 'Linux'
