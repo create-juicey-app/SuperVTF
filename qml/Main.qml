@@ -64,9 +64,44 @@ ApplicationWindow {
         function loadShaders() {
             shaderModel.clear()
             var shaders = get_supported_shaders()
-            for (var i = 0; i < shaders.length; ++i) {
-                shaderModel.append({"name": shaders[i]})
+            
+            // Define common/priority shaders that should appear first
+            var commonShaders = [
+                "LightmappedGeneric",
+                "VertexLitGeneric", 
+                "UnlitGeneric",
+                "WorldVertexTransition",
+                "Water",
+                "Refract",
+                "SDK_Eyes",
+                "Teeth",
+                "DecalModulate"
+            ]
+            
+            // Add those common shaders first with category
+            for (var i = 0; i < commonShaders.length; i++) {
+                for (var j = 0; j < shaders.length; j++) {
+                    if (shaders[j].toLowerCase() === commonShaders[i].toLowerCase()) {
+                        shaderModel.append({"name": shaders[j], "category": "Common"})
+                        break
+                    }
+                }
             }
+            
+            // Add remaining shaders
+            for (var k = 0; k < shaders.length; k++) {
+                var isCommon = false
+                for (var l = 0; l < commonShaders.length; l++) {
+                    if (shaders[k].toLowerCase() === commonShaders[l].toLowerCase()) {
+                        isCommon = true
+                        break
+                    }
+                }
+                if (!isCommon) {
+                    shaderModel.append({"name": shaders[k], "category": "Other"})
+                }
+            }
+            
             console.log("Loaded", shaderModel.count, "shaders")
         }
     }
@@ -329,7 +364,10 @@ ApplicationWindow {
                             textRole: "name"
                             font.pixelSize: 13
                             
-                            background: Rectangle { color: "transparent" }
+                            background: Rectangle { 
+                                color: shaderCombo.pressed ? "#2a2d2e" : (shaderCombo.hovered ? "#323232" : "transparent")
+                                radius: 4
+                            }
                             
                             contentItem: Text {
                                 leftPadding: 12
@@ -345,6 +383,84 @@ ApplicationWindow {
                                 text: "▼"
                                 color: root.textDim
                                 font.pixelSize: 10
+                            }
+                            
+                            delegate: ItemDelegate {
+                                id: shaderDelegate
+                                required property int index
+                                required property var model
+                                
+                                property bool isFirstInCategory: {
+                                    if (index === 0) return true
+                                    var prevItem = shaderModel.get(index - 1)
+                                    return prevItem ? prevItem.category !== model.category : true
+                                }
+                                
+                                width: shaderCombo.width
+                                height: 32
+                                hoverEnabled: true
+                                padding: 0
+                                
+                                contentItem: Item {
+                                    anchors.fill: parent
+                                    
+                                    // Category separator line
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        width: parent.width
+                                        height: 1
+                                        color: root.panelBorder
+                                        visible: shaderDelegate.isFirstInCategory && shaderDelegate.index > 0
+                                    }
+                                    
+                                    // Category indicator
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: shaderDelegate.isFirstInCategory
+                                        text: shaderDelegate.model.category === "Common" ? "★" : "○"
+                                        color: shaderDelegate.model.category === "Common" ? "#f1c40f" : root.textDim
+                                        font.pixelSize: 10
+                                    }
+                                    
+                                    // Shader name
+                                    Text {
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 24
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: shaderDelegate.model.name
+                                        color: shaderDelegate.highlighted ? "#ffffff" : root.textColor
+                                        font.pixelSize: 13
+                                    }
+                                }
+                                
+                                background: Rectangle { 
+                                    color: shaderDelegate.highlighted ? root.accent : (shaderDelegate.hovered ? "#3c3c3c" : "transparent")
+                                }
+                                highlighted: shaderCombo.highlightedIndex === index
+                            }
+                            
+                            popup: Popup {
+                                y: shaderCombo.height
+                                width: shaderCombo.width
+                                implicitHeight: Math.min(contentItem.implicitHeight + 2, 300)
+                                padding: 1
+                                
+                                contentItem: ListView {
+                                    clip: true
+                                    implicitHeight: contentHeight
+                                    model: shaderCombo.popup.visible ? shaderCombo.delegateModel : null
+                                    currentIndex: shaderCombo.highlightedIndex
+                                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                                }
+                                
+                                background: Rectangle {
+                                    color: "#1e1e1e"
+                                    border.color: root.panelBorder
+                                    border.width: 1
+                                    radius: 4
+                                }
                             }
                             
                             onActivated: {
@@ -760,7 +876,12 @@ ApplicationWindow {
                                         MouseArea {
                                             anchors.fill: parent
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: colorDialog.open()
+                                            onClicked: {
+                                                colorPickerDialog.targetTextField = colorTextField
+                                                colorPickerDialog.initialColor = colorPreview.color
+                                                colorPickerDialog.currentColor = colorPreview.color
+                                                colorPickerDialog.open()
+                                            }
                                         }
                                     }
                                     
@@ -787,19 +908,6 @@ ApplicationWindow {
                                         font.pixelSize: 12
                                         selectByMouse: true
                                     }
-                                    
-                                    ColorDialog {
-                                        id: colorDialog
-                                        title: "Choose " + delegateRoot.pDisplayName
-                                        selectedColor: colorPreview.color
-                                        
-                                        onAccepted: {
-                                            var r = Math.round(selectedColor.r * 255)
-                                            var g = Math.round(selectedColor.g * 255)
-                                            var b = Math.round(selectedColor.b * 255)
-                                            colorTextField.text = "[" + r + " " + g + " " + b + "]"
-                                        }
-                                    }
                                 }
                                 
                                 // Texture control
@@ -815,19 +923,12 @@ ApplicationWindow {
                                         border.color: root.inputBorder
                                         radius: 4
                                         
-                                        Image {
-                                            anchors.fill: parent
-                                            anchors.margins: 2
-                                            fillMode: Image.PreserveAspectFit
-                                            source: delegateRoot.pValue ? "image://vtf/" + delegateRoot.pValue : ""
-                                            
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: "?"
-                                                color: root.textDim
-                                                font.pixelSize: 14
-                                                visible: parent.status !== Image.Ready
-                                            }
+                                        // Texture icon placeholder (image provider not available)
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: delegateRoot.pValue ? "🖼" : "?"
+                                            color: delegateRoot.pValue ? root.textColor : root.textDim
+                                            font.pixelSize: 18
                                         }
                                     }
                                     
@@ -1382,32 +1483,7 @@ ApplicationWindow {
     }
     
     // ===== STATUS BAR =====
-    footer: Rectangle {
-        height: 28
-        color: "#007acc"
-        
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 12
-            
-            Text {
-                id: statusBar
-                text: "Ready"
-                color: "#ffffff"
-                font.pixelSize: 12
-            }
-            
-            Item { Layout.fillWidth: true }
-            
-            Text {
-                text: textureProvider.is_loaded ? 
-                      `${textureProvider.texture_width}×${textureProvider.texture_height} | ${textureProvider.format_name}` : ""
-                color: "#ffffff"
-                font.pixelSize: 12
-            }
-        }
-    }
+    // Status bar removed for cleaner look
     
     // ===== DIALOGS =====
     
@@ -1418,6 +1494,8 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: 400
         padding: 0
+        
+        onOpened: newShaderCombo.setDefaultShader()
         
         background: Rectangle {
             color: root.panelBg
@@ -1468,8 +1546,126 @@ ApplicationWindow {
                 ComboBox {
                     id: newShaderCombo
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 36
                     model: shaderModel
                     textRole: "name"
+                    font.pixelSize: 13
+                    
+                    // Set default to LightmappedGeneric when dialog opens
+                    Component.onCompleted: setDefaultShader()
+                    
+                    function setDefaultShader() {
+                        for (var i = 0; i < shaderModel.count; i++) {
+                            if (shaderModel.get(i).name.toLowerCase() === "lightmappedgeneric") {
+                                currentIndex = i
+                                break
+                            }
+                        }
+                    }
+                    
+                    background: Rectangle {
+                        color: newShaderCombo.pressed ? "#2a2d2e" : (newShaderCombo.hovered ? "#3c3c3c" : root.inputBg)
+                        border.color: newShaderCombo.activeFocus ? root.accent : root.inputBorder
+                        border.width: 1
+                        radius: 4
+                    }
+                    
+                    contentItem: Text {
+                        leftPadding: 12
+                        rightPadding: 30
+                        text: newShaderCombo.displayText
+                        color: root.textColor
+                        font: newShaderCombo.font
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                    
+                    indicator: Text {
+                        x: parent.width - width - 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "▼"
+                        color: root.textDim
+                        font.pixelSize: 10
+                    }
+                    
+                    delegate: ItemDelegate {
+                        id: newShaderDelegate
+                        required property int index
+                        required property var model
+                        
+                        // Check if this is the first item of a new category
+                        property bool isFirstInCategory: {
+                            if (index === 0) return true
+                            var prevItem = shaderModel.get(index - 1)
+                            return prevItem ? prevItem.category !== model.category : true
+                        }
+                        
+                        width: newShaderCombo.width
+                        height: 32
+                        hoverEnabled: true
+                        padding: 0
+                        
+                        contentItem: Item {
+                            anchors.fill: parent
+                            
+                            // Category separator line
+                            Rectangle {
+                                anchors.top: parent.top
+                                width: parent.width
+                                height: 1
+                                color: root.panelBorder
+                                visible: newShaderDelegate.isFirstInCategory && newShaderDelegate.index > 0
+                            }
+                            
+                            // Category label (small, on the left)
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: newShaderDelegate.isFirstInCategory
+                                text: newShaderDelegate.model.category === "Common" ? "★" : "○"
+                                color: newShaderDelegate.model.category === "Common" ? "#f1c40f" : root.textDim
+                                font.pixelSize: 10
+                            }
+                            
+                            // Shader name
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: 24
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: newShaderDelegate.model.name
+                                color: newShaderDelegate.highlighted ? "#ffffff" : root.textColor
+                                font.pixelSize: 13
+                            }
+                        }
+                        
+                        background: Rectangle { 
+                            color: newShaderDelegate.highlighted ? root.accent : (newShaderDelegate.hovered ? "#3c3c3c" : "transparent")
+                        }
+                        highlighted: newShaderCombo.highlightedIndex === index
+                    }
+                    
+                    popup: Popup {
+                        y: newShaderCombo.height + 2
+                        width: newShaderCombo.width
+                        implicitHeight: Math.min(contentItem.implicitHeight + 2, 300)
+                        padding: 1
+                        
+                        contentItem: ListView {
+                            clip: true
+                            implicitHeight: contentHeight
+                            model: newShaderCombo.popup.visible ? newShaderCombo.delegateModel : null
+                            currentIndex: newShaderCombo.highlightedIndex
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        }
+                        
+                        background: Rectangle {
+                            color: "#1e1e1e"
+                            border.color: root.panelBorder
+                            border.width: 1
+                            radius: 4
+                        }
+                    }
                 }
             }
             
@@ -1895,6 +2091,369 @@ ApplicationWindow {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: aboutDialog.close()
+                    }
+                }
+            }
+        }
+    }
+    
+    // Custom Color Picker Dialog
+    Dialog {
+        id: colorPickerDialog
+        modal: true
+        anchors.centerIn: parent
+        width: 340
+        padding: 0
+        
+        property var targetTextField: null
+        property color initialColor: "white"
+        property color currentColor: "white"
+        property real hue: 0
+        property real saturation: 1
+        property real brightness: 1
+        
+        onCurrentColorChanged: {
+            hue = currentColor.hsvHue >= 0 ? currentColor.hsvHue : 0
+            saturation = currentColor.hsvSaturation
+            brightness = currentColor.hsvValue
+        }
+        
+        background: Rectangle {
+            color: root.panelBg
+            border.color: root.panelBorder
+            radius: 8
+        }
+        
+        header: Item { height: 0 }
+        footer: Item { height: 0 }
+        
+        contentItem: ColumnLayout {
+            spacing: 0
+            
+            // Header
+            Rectangle {
+                Layout.fillWidth: true
+                height: 44
+                color: root.panelBg
+                
+                Text {
+                    anchors.centerIn: parent
+                    text: "Color Picker"
+                    color: root.textColor
+                    font.pixelSize: 14
+                    font.bold: true
+                }
+                
+                Rectangle {
+                    anchors.bottom: parent.bottom
+                    width: parent.width
+                    height: 1
+                    color: root.panelBorder
+                }
+            }
+            
+            // Color picker content
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.margins: 16
+                spacing: 16
+                
+                // Saturation/Brightness picker
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 180
+                    radius: 4
+                    
+                    // Hue background
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 4
+                        color: Qt.hsva(colorPickerDialog.hue, 1, 1, 1)
+                    }
+                    
+                    // Saturation gradient (white to transparent)
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 4
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#FFFFFF" }
+                            GradientStop { position: 1.0; color: "transparent" }
+                        }
+                    }
+                    
+                    // Brightness gradient (transparent to black)
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 4
+                        gradient: Gradient {
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 1.0; color: "#000000" }
+                        }
+                    }
+                    
+                    // Selection cursor
+                    Rectangle {
+                        x: colorPickerDialog.saturation * (parent.width - 12)
+                        y: (1 - colorPickerDialog.brightness) * (parent.height - 12)
+                        width: 12
+                        height: 12
+                        radius: 6
+                        color: "transparent"
+                        border.color: "white"
+                        border.width: 2
+                        
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 8
+                            height: 8
+                            radius: 4
+                            color: "transparent"
+                            border.color: "black"
+                            border.width: 1
+                        }
+                    }
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        
+                        function updateColor(mouseX, mouseY) {
+                            colorPickerDialog.saturation = Math.max(0, Math.min(1, mouseX / width))
+                            colorPickerDialog.brightness = Math.max(0, Math.min(1, 1 - mouseY / height))
+                            colorPickerDialog.currentColor = Qt.hsva(colorPickerDialog.hue, colorPickerDialog.saturation, colorPickerDialog.brightness, 1)
+                        }
+                        
+                        onPressed: function(mouse) { updateColor(mouse.x, mouse.y) }
+                        onPositionChanged: function(mouse) { if (pressed) updateColor(mouse.x, mouse.y) }
+                    }
+                }
+                
+                // Hue slider
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 20
+                    radius: 4
+                    
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#FF0000" }
+                        GradientStop { position: 0.167; color: "#FFFF00" }
+                        GradientStop { position: 0.333; color: "#00FF00" }
+                        GradientStop { position: 0.5; color: "#00FFFF" }
+                        GradientStop { position: 0.667; color: "#0000FF" }
+                        GradientStop { position: 0.833; color: "#FF00FF" }
+                        GradientStop { position: 1.0; color: "#FF0000" }
+                    }
+                    
+                    Rectangle {
+                        x: colorPickerDialog.hue * (parent.width - 8)
+                        y: -2
+                        width: 8
+                        height: parent.height + 4
+                        radius: 2
+                        color: "transparent"
+                        border.color: "white"
+                        border.width: 2
+                    }
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        
+                        function updateHue(mouseX) {
+                            colorPickerDialog.hue = Math.max(0, Math.min(1, mouseX / width))
+                            colorPickerDialog.currentColor = Qt.hsva(colorPickerDialog.hue, colorPickerDialog.saturation, colorPickerDialog.brightness, 1)
+                        }
+                        
+                        onPressed: function(mouse) { updateHue(mouse.x) }
+                        onPositionChanged: function(mouse) { if (pressed) updateHue(mouse.x) }
+                    }
+                }
+                
+                // Color preview and RGB values
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    
+                    // Preview boxes
+                    ColumnLayout {
+                        spacing: 4
+                        
+                        Text {
+                            text: "New"
+                            color: root.textDim
+                            font.pixelSize: 10
+                        }
+                        
+                        Rectangle {
+                            width: 50
+                            height: 30
+                            radius: 4
+                            color: colorPickerDialog.currentColor
+                            border.color: root.inputBorder
+                        }
+                        
+                        Text {
+                            text: "Old"
+                            color: root.textDim
+                            font.pixelSize: 10
+                        }
+                        
+                        Rectangle {
+                            width: 50
+                            height: 30
+                            radius: 4
+                            color: colorPickerDialog.initialColor
+                            border.color: root.inputBorder
+                            
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: colorPickerDialog.currentColor = colorPickerDialog.initialColor
+                            }
+                        }
+                    }
+                    
+                    // RGB inputs
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        rowSpacing: 6
+                        columnSpacing: 8
+                        
+                        Text { text: "R"; color: "#e74c3c"; font.pixelSize: 12; font.bold: true }
+                        TextField {
+                            id: redInput
+                            Layout.fillWidth: true
+                            text: activeFocus ? text : Math.round(colorPickerDialog.currentColor.r * 255).toString()
+                            validator: IntValidator { bottom: 0; top: 255 }
+                            inputMethodHints: Qt.ImhNoPredictiveText
+                            onTextEdited: {
+                                var r = parseInt(text) || 0
+                                colorPickerDialog.currentColor = Qt.rgba(r/255, colorPickerDialog.currentColor.g, colorPickerDialog.currentColor.b, 1)
+                            }
+                            background: Rectangle {
+                                implicitHeight: 26
+                                color: root.inputBg
+                                border.color: redInput.activeFocus ? "#e74c3c" : root.inputBorder
+                                radius: 4
+                            }
+                            color: root.textColor
+                            font.pixelSize: 12
+                        }
+                        
+                        Text { text: "G"; color: "#2ecc71"; font.pixelSize: 12; font.bold: true }
+                        TextField {
+                            id: greenInput
+                            Layout.fillWidth: true
+                            text: activeFocus ? text : Math.round(colorPickerDialog.currentColor.g * 255).toString()
+                            validator: IntValidator { bottom: 0; top: 255 }
+                            inputMethodHints: Qt.ImhNoPredictiveText
+                            onTextEdited: {
+                                var g = parseInt(text) || 0
+                                colorPickerDialog.currentColor = Qt.rgba(colorPickerDialog.currentColor.r, g/255, colorPickerDialog.currentColor.b, 1)
+                            }
+                            background: Rectangle {
+                                implicitHeight: 26
+                                color: root.inputBg
+                                border.color: greenInput.activeFocus ? "#2ecc71" : root.inputBorder
+                                radius: 4
+                            }
+                            color: root.textColor
+                            font.pixelSize: 12
+                        }
+                        
+                        Text { text: "B"; color: "#3498db"; font.pixelSize: 12; font.bold: true }
+                        TextField {
+                            id: blueInput
+                            Layout.fillWidth: true
+                            text: activeFocus ? text : Math.round(colorPickerDialog.currentColor.b * 255).toString()
+                            validator: IntValidator { bottom: 0; top: 255 }
+                            inputMethodHints: Qt.ImhNoPredictiveText
+                            onTextEdited: {
+                                var b = parseInt(text) || 0
+                                colorPickerDialog.currentColor = Qt.rgba(colorPickerDialog.currentColor.r, colorPickerDialog.currentColor.g, b/255, 1)
+                            }
+                            background: Rectangle {
+                                implicitHeight: 26
+                                color: root.inputBg
+                                border.color: blueInput.activeFocus ? "#3498db" : root.inputBorder
+                                radius: 4
+                            }
+                            color: root.textColor
+                            font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+            
+            // Footer with buttons
+            Rectangle {
+                Layout.fillWidth: true
+                height: 52
+                color: "#1e1e1e"
+                
+                Rectangle {
+                    anchors.top: parent.top
+                    width: parent.width
+                    height: 1
+                    color: root.panelBorder
+                }
+                
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 12
+                    
+                    Rectangle {
+                        width: 80
+                        height: 30
+                        radius: 4
+                        color: cancelColorMouse.containsMouse ? root.buttonHover : root.buttonBg
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Cancel"
+                            color: root.textColor
+                            font.pixelSize: 12
+                        }
+                        
+                        MouseArea {
+                            id: cancelColorMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: colorPickerDialog.close()
+                        }
+                    }
+                    
+                    Rectangle {
+                        width: 80
+                        height: 30
+                        radius: 4
+                        color: okColorMouse.containsMouse ? root.accentHover : root.accent
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "OK"
+                            color: "white"
+                            font.pixelSize: 12
+                            font.bold: true
+                        }
+                        
+                        MouseArea {
+                            id: okColorMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (colorPickerDialog.targetTextField) {
+                                    var r = Math.round(colorPickerDialog.currentColor.r * 255)
+                                    var g = Math.round(colorPickerDialog.currentColor.g * 255)
+                                    var b = Math.round(colorPickerDialog.currentColor.b * 255)
+                                    colorPickerDialog.targetTextField.text = "[" + r + " " + g + " " + b + "]"
+                                }
+                                colorPickerDialog.close()
+                            }
+                        }
                     }
                 }
             }

@@ -361,14 +361,22 @@ impl qobject::MaterialModel {
         self.as_mut().shader_changed();
     }
 
-    // Get a parameter value by name
+    // Get a parameter value by name (strips quotes for display)
     fn get_parameter_value(&self, name: &QString) -> QString {
         let name_str = name.to_string();
 
         self.material
             .as_ref()
             .and_then(|m| m.get_parameter(&name_str))
-            .map(|p| QString::from(p.value.to_vmt_string().as_str()))
+            .map(|p| {
+                let s = p.value.to_vmt_string();
+                // Strip surrounding quotes for display
+                if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
+                    QString::from(&s[1..s.len() - 1])
+                } else {
+                    QString::from(s.as_str())
+                }
+            })
             .unwrap_or_default()
     }
 
