@@ -98,8 +98,7 @@ jobs:
           # However, to be safe, we use the env var it provides ($env:IQTA_TOOLS_ROOT is sometimes set, 
           # but simply calling windeployqt usually works if the previous step succeeded).
           Write-Host "Running windeployqt..."
-          # Keep it verbose and explicitly include the platforms plugin
-          windeployqt --dir $artifactDir --qmldir qml --plugins platforms --no-translations --no-compiler-runtime --no-system-d3d-compiler --no-opengl-sw --verbose=1 --release "$artifactDir\supervtf.exe"
+          windeployqt --dir $artifactDir --qmldir qml --no-translations --no-compiler-runtime --no-opengl-sw --release "$artifactDir\supervtf.exe"
 
           # 5. Clean up bloat
           if (Test-Path "$artifactDir\opengl32sw.dll") { Remove-Item "$artifactDir\opengl32sw.dll" }
@@ -108,47 +107,7 @@ jobs:
 
           # 6. Verify Critical DLL (Sanity Check)
           if (-not (Test-Path "$artifactDir\Qt6Core.dll")) { throw "Qt6Core.dll missing! Windeployqt failed." }
-
-          # Confirm qwindows.dll presence, otherwise attempt targeted fallback search and copy
-          if (-not (Test-Path "$artifactDir\plugins\platforms\qwindows.dll")) {
-            Write-Host "qwindows.dll not found in $artifactDir\plugins\platforms. Printing plugin dirs and attempting fallback search..."
-            $qtBin = $env:QT_BIN
-            Write-Host "QT_BIN = $qtBin"
-            $candidates = @(
-              (Join-Path $qtBin '..\plugins\platforms'),
-              (Join-Path $qtBin '..\..\plugins\platforms'),
-              "C:\Qt\6.6.3\msvc2019_64\plugins\platforms",
-              "C:\HostedToolCache\windows\Qt\6.6.3\msvc2019_64\plugins\platforms",
-              "D:\a\SuperVTF\Qt\6.6.3\msvc2019_64\plugins\platforms",
-              "D:\a\_temp"
-            )
-            foreach ($cand in $candidates) {
-              if (Test-Path $cand) { Write-Host "Candidate path exists: $cand"; Get-ChildItem -Path $cand -Filter qwindows.dll -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  -> $_.FullName" } } else { Write-Host "Candidate path does not exist: $cand" }
-            }
-
-            # Perform a focused runner search for qwindows.dll in likely tool cache and agent paths
-            $searchRoots = @("D:\a", "C:\HostedToolCache", "C:\Qt")
-            $foundPaths = @()
-            foreach ($root in $searchRoots) {
-              if (Test-Path $root) {
-                Write-Host "Searching $root for qwindows.dll..."
-                $hits = Get-ChildItem -Path $root -Filter qwindows.dll -Recurse -ErrorAction SilentlyContinue -Force -File | Select-Object -ExpandProperty FullName -ErrorAction SilentlyContinue
-                if ($hits) { $foundPaths += $hits }
-              }
-            }
-            if ($foundPaths.Count -gt 0) {
-              Write-Host "Found qwindows.dll at:"
-              $foundPaths | ForEach-Object { Write-Host " - $_" }
-              $source = $foundPaths[0]
-              New-Item -ItemType Directory -Force -Path (Join-Path $artifactDir 'plugins\platforms') | Out-Null
-              Copy-Item -Path $source -Destination (Join-Path $artifactDir 'plugins\platforms') -Force
-              Write-Host "Copied $source to artifact/plugins/platforms"
-            } else {
-              Write-Host "qwindows.dll not found in search roots. Listing artifact for debugging:"
-              Get-ChildItem -Path $artifactDir -Recurse | ForEach-Object { Write-Host $_.FullName }
-              throw "qwindows.dll missing! Windeployqt failed and no fallback copy found."
-            }
-          }
+          if (-not (Test-Path "$artifactDir\plugins\platforms\qwindows.dll")) { throw "qwindows.dll missing! Windeployqt failed." }
 
           # 7. Compress ONLY the Executable (NEVER compress DLLs)
           Write-Host "Compressing EXE..."
