@@ -4,11 +4,19 @@
 
 use cxx_qt::CxxQtType;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
+use crate::vpk_archive::VPK_MANAGER;
 use crate::vtf::{DecodedFrame, VtfDecoder, VtfImage};
+
+/// Logging helper for texture operations
+macro_rules! tex_log {
+    ($($arg:tt)*) => {
+        eprintln!("[Texture] {}", format!($($arg)*));
+    };
+}
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -183,6 +191,7 @@ impl qobject::TextureProvider {
                 true
             }
             Err(e) => {
+                tex_log!("✗ Failed to load: {}", e);
                 let msg = QString::from(format!("Failed to load texture: {}", e).as_str());
                 self.as_mut().set_error_message(msg.clone());
                 self.as_mut().error_occurred(msg);
@@ -199,6 +208,9 @@ impl qobject::TextureProvider {
     ) -> bool {
         let texture_path_str = texture_path.to_string();
         let materials_root_str = materials_root.to_string();
+        
+        tex_log!("Loading texture: {}", texture_path_str);
+        tex_log!("  Materials root: {}", materials_root_str);
 
         // Construct the full path
         // VMT paths are relative to the materials folder and don't include extension
@@ -206,8 +218,10 @@ impl qobject::TextureProvider {
         full_path.push(&texture_path_str);
         full_path.set_extension("vtf");
 
-        // Try loading
+        // Try loading from disk first
+        tex_log!("  Trying disk: {}", full_path.display());
         if full_path.exists() {
+            tex_log!("  ✓ Found on disk!");
             let path = QString::from(full_path.to_string_lossy().as_ref());
             return self.load_texture(&path);
         }
@@ -221,12 +235,59 @@ impl qobject::TextureProvider {
             alt_path.push(&texture_path_str);
             alt_path.set_extension("vtf");
 
+            tex_log!("  Trying disk (alt): {}", alt_path.display());
             if alt_path.exists() {
+                tex_log!("  ✓ Found on disk (alt path)!");
                 let path = QString::from(alt_path.to_string_lossy().as_ref());
                 return self.load_texture(&path);
             }
         }
 
+        // Try loading from VPK archives
+        tex_log!("  Not on disk, trying VPK archives...");
+        // Build the VPK path (usually "materials/path/texture.vtf")
+        // First ensure the path has correct format - add .vtf only if not already present
+        let texture_normalized = texture_path_str.replace('\\', "/");
+        let texture_with_ext = if texture_normalized.to_lowercase().ends_with(".vtf") {
+            texture_normalized
+        } else {
+            format!("{}.vtf", texture_normalized)
+        };
+        
+        let vpk_path = if texture_with_ext.starts_with("materials/") {
+            texture_with_ext
+        } else {
+            format!("materials/{}", texture_with_ext)
+        };
+
+        tex_log!("  VPK path: {}", vpk_path);
+
+        // Try to load from VPK
+        let game_dir = Path::new(&materials_root_str);
+        if let Ok(data) = VPK_MANAGER.read_file(game_dir, &vpk_path) {
+            tex_log!("  ✓ Found in VPK! ({} bytes)", data.len());
+            // Load VTF from memory
+            match VtfDecoder::load_from_memory(&data) {
+                Ok(vtf) => {
+                    tex_log!("  ✓ Decoded VTF: {}x{} {:?}", vtf.width(), vtf.height(), vtf.format());
+                    self.as_mut().update_from_vtf(&vtf);
+                    self.as_mut().set_current_texture(QString::from(format!("vpk:{}", vpk_path).as_str()));
+                    self.as_mut().rust_mut().vtf_image = Some(vtf);
+                    self.as_mut().decode_current_frame();
+                    self.as_mut().texture_loaded();
+                    return true;
+                }
+                Err(e) => {
+                    tex_log!("  ✗ Failed to decode VTF from VPK: {}", e);
+                    let msg = QString::from(format!("Failed to decode VPK texture: {}", e).as_str());
+                    self.as_mut().set_error_message(msg.clone());
+                    self.as_mut().error_occurred(msg);
+                    return false;
+                }
+            }
+        }
+
+        tex_log!("  ✗ Texture not found anywhere!");
         let msg = QString::from(format!("Texture not found: {}", texture_path_str).as_str());
         self.as_mut().set_error_message(msg.clone());
         self.as_mut().error_occurred(msg);
@@ -261,7 +322,7 @@ impl qobject::TextureProvider {
             return QString::from(format!("file://{}", thumbnail_path.to_string_lossy()).as_str());
         }
 
-        // Try to find and load the texture
+        // Try to find and load the texture from disk first
         let mut full_path = PathBuf::from(&materials_root_str);
         full_path.push(&texture_path_str);
         full_path.set_extension("vtf");
@@ -281,32 +342,69 @@ impl qobject::TextureProvider {
             }
         }
 
-        if !full_path.exists() {
-            return QString::default();
+        // Try loading from disk
+        if full_path.exists() {
+            return self.generate_thumbnail_from_file(&full_path, &thumbnail_path);
         }
 
-        // Load the VTF and generate thumbnail
-        match VtfDecoder::load_file(full_path.to_string_lossy().as_ref()) {
-            Ok(vtf) => {
-                // Use a small mipmap for fast thumbnail generation
-                // Higher mipmap number = smaller image = faster decode
-                // Use about halfway through the mipmap chain for small but recognizable thumbnails
-                let mipmap_level = if vtf.header.mipmap_count <= 2 {
-                    0
+        // Try loading from VPK archives
+        // First ensure the path has correct format - add .vtf only if not already present
+        let texture_normalized = texture_path_str.replace('\\', "/");
+        let texture_with_ext = if texture_normalized.to_lowercase().ends_with(".vtf") {
+            texture_normalized
+        } else {
+            format!("{}.vtf", texture_normalized)
+        };
+        
+        let vpk_path = if texture_with_ext.starts_with("materials/") {
+            texture_with_ext
+        } else {
+            format!("materials/{}", texture_with_ext)
+        };
+
+        let game_dir = Path::new(&materials_root_str);
+        if let Ok(data) = VPK_MANAGER.read_file(game_dir, &vpk_path) {
+            return self.generate_thumbnail_from_data(&data, &thumbnail_path);
+        }
+
+        QString::default()
+    }
+
+    // Helper: Generate thumbnail from a file path
+    fn generate_thumbnail_from_file(&self, vtf_path: &Path, thumbnail_path: &Path) -> QString {
+        match VtfDecoder::load_file(vtf_path.to_string_lossy().as_ref()) {
+            Ok(vtf) => self.generate_thumbnail_from_vtf(&vtf, thumbnail_path),
+            Err(_) => QString::default(),
+        }
+    }
+
+    // Helper: Generate thumbnail from VTF data bytes
+    fn generate_thumbnail_from_data(&self, data: &[u8], thumbnail_path: &Path) -> QString {
+        match VtfDecoder::load_from_memory(data) {
+            Ok(vtf) => self.generate_thumbnail_from_vtf(&vtf, thumbnail_path),
+            Err(_) => QString::default(),
+        }
+    }
+
+    // Helper: Generate thumbnail from loaded VTF
+    fn generate_thumbnail_from_vtf(&self, vtf: &VtfImage, thumbnail_path: &Path) -> QString {
+        // Use a mipmap about 1/4 of the way through the chain for good quality thumbnails
+        // Lower mipmap number = larger image = better quality but slower decode
+        // For small mipmap chains, stay at 0 (full resolution).
+        let mipmap_level = if vtf.header.mipmap_count <= 3 {
+            0u8
+        } else {
+            // Use 1/4 of the way through for higher quality (e.g., mipmap 1-2 for most textures)
+            // This gives ~256x256 or ~512x512 thumbnails for 1024x1024 textures
+            (vtf.header.mipmap_count / 4).max(1).min(vtf.header.mipmap_count.saturating_sub(1))
+        };
+        
+        match vtf.decode(mipmap_level, 0) {
+            Ok(decoded) => {
+                if decoded.save(thumbnail_path.to_str().unwrap_or("")).is_ok() {
+                    QString::from(format!("file://{}", thumbnail_path.to_string_lossy()).as_str())
                 } else {
-                    // Use about halfway - gives ~64x64 or ~128x128 for most textures
-                    vtf.header.mipmap_count / 2
-                };
-                
-                match vtf.decode(mipmap_level, 0) {
-                    Ok(decoded) => {
-                        if decoded.save(thumbnail_path.to_str().unwrap_or("")).is_ok() {
-                            QString::from(format!("file://{}", thumbnail_path.to_string_lossy()).as_str())
-                        } else {
-                            QString::default()
-                        }
-                    }
-                    Err(_) => QString::default(),
+                    QString::default()
                 }
             }
             Err(_) => QString::default(),
@@ -457,29 +555,68 @@ impl qobject::TextureProvider {
             self.as_mut().decode_current_frame();
         }
 
-        if let Some(ref decoded) = self.current_decoded {
+        if self.current_decoded.is_none() {
+            return QString::default();
+        }
+
+        // At this point we have a decoded frame
+        let decoded = self.current_decoded.as_ref().unwrap();
             // Create temp file path with frame/mipmap in name for cache invalidation
             let frame = self.current_frame;
-            let mipmap = self.current_mipmap;
+            // Use a slightly higher (smaller) mipmap for previews when possible.
+            // Keep provider state untouched: decode & save from the desired mipmap
+            // Use 1/4 of the way for good quality previews
+            let mipmap: i32 = if self.current_mipmap == 0 {
+                // If we have > 3 mipmaps, use mipmap 1 for preview (still high quality)
+                let mut prefer = 0i32;
+                if let Some(ref vtf) = self.vtf_image {
+                    if vtf.header.mipmap_count > 3 { prefer = 1; }
+                }
+                prefer
+            } else { self.current_mipmap };
             let temp_dir = std::env::temp_dir();
             let preview_path = temp_dir.join(format!("supervtf_preview_{}_{}.png", frame, mipmap));
 
-            // Save the decoded frame to the temp file
-            match decoded.save(preview_path.to_str().unwrap_or("")) {
-                Ok(_) => {
-                    self.as_mut().rust_mut().preview_path = Some(preview_path.clone());
-                    // Return just the path - QML Image will handle it
-                    QString::from(preview_path.to_str().unwrap_or(""))
+                // If the decoded frame matches our desired mipmap, save that; otherwise decode new one
+                if decoded.mipmap_level as i32 == mipmap as i32 {
+                    match decoded.save(preview_path.to_str().unwrap_or("")) {
+                        Ok(_) => {
+                            self.as_mut().rust_mut().preview_path = Some(preview_path.clone());
+                            // Return just the path - QML Image will handle it
+                            return QString::from(preview_path.to_str().unwrap_or(""));
+                        }
+                        Err(e) => {
+                            let msg = QString::from(format!("Failed to save preview: {}", e).as_str());
+                            self.as_mut().set_error_message(msg);
+                            return QString::default();
+                        }
+                    }
                 }
-                Err(e) => {
-                    let msg = QString::from(format!("Failed to save preview: {}", e).as_str());
-                    self.as_mut().set_error_message(msg);
-                    QString::default()
+
+                // Otherwise decode the requested mipmap for preview (without mutating provider state)
+                if let Some(ref vtf) = self.vtf_image {
+            match vtf.decode(mipmap as u8, frame as u16) {
+                        Ok(decoded_preview) => {
+                            match decoded_preview.save(preview_path.to_str().unwrap_or("")) {
+                                Ok(_) => {
+                                    self.as_mut().rust_mut().preview_path = Some(preview_path.clone());
+                                    return QString::from(preview_path.to_str().unwrap_or(""));
+                                }
+                                Err(e) => {
+                                    let msg = QString::from(format!("Failed to save preview: {}", e).as_str());
+                                    self.as_mut().set_error_message(msg);
+                                    return QString::default();
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            let msg = QString::from(format!("Failed to decode preview mipmap: {}", e).as_str());
+                            self.as_mut().set_error_message(msg);
+                            return QString::default();
+                        }
+                    }
                 }
-            }
-        } else {
-            QString::default()
-        }
+        QString::default()
     }
 }
 

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Dialogs
 
@@ -732,75 +733,300 @@ Item {
     Component {
         id: textureComponent
         
-        RowLayout {
-            spacing: 8
+        ColumnLayout {
+            spacing: 4
             
-            Rectangle {
-                Layout.preferredWidth: 48
-                Layout.preferredHeight: 48
-                color: inputBackground
-                border.color: inputBorder
-                border.width: 1
-                radius: 3
+            RowLayout {
+                spacing: 8
+                Layout.fillWidth: true
                 
-                Image {
-                    anchors.fill: parent
-                    anchors.margins: 2
-                    fillMode: Image.PreserveAspectFit
-                    source: parameterEntry.value ? "image://vtf/" + parameterEntry.value : ""
+                // Texture preview thumbnail - clickable to open browser
+                Rectangle {
+                    id: texturePreviewRect
+                    Layout.preferredWidth: 48
+                    Layout.preferredHeight: 48
+                    color: previewMouseArea.containsMouse ? hoverBackground : inputBackground
+                    border.color: previewMouseArea.containsMouse ? accent : inputBorder
+                    border.width: 1
+                    radius: 3
                     
-                    Text {
-                        anchors.centerIn: parent
-                        text: "?"
-                        color: textSecondary
-                        font.pixelSize: 16
-                        visible: parent.status !== Image.Ready
+                    // Thumbnail source from texture provider
+                    property string thumbnailSource: ""
+                    
+                    function updateThumbnail() {
+                        if (parameterEntry.value && typeof textureProvider !== 'undefined' && typeof app !== 'undefined' && app.materials_root.length > 0) {
+                            var result = textureProvider.get_thumbnail_for_texture(parameterEntry.value, app.materials_root)
+                            if (result.length > 0) {
+                                thumbnailSource = result
+                            } else {
+                                thumbnailSource = ""
+                            }
+                        } else {
+                            thumbnailSource = ""
+                        }
+                    }
+                    
+                    Component.onCompleted: updateThumbnail()
+                    
+                    Connections {
+                        target: parameterEntry
+                        function onValueChanged() {
+                            texturePreviewRect.updateThumbnail()
+                        }
+                    }
+                    
+                    Image {
+                        id: texturePreviewImage
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        fillMode: Image.PreserveAspectFit
+                        source: texturePreviewRect.thumbnailSource
+                        
+                        Text {
+                            anchors.centerIn: parent
+                            text: "?"
+                            color: textSecondary
+                            font.pixelSize: 16
+                            visible: parent.status !== Image.Ready
+                        }
+                    }
+                    
+                    MouseArea {
+                        id: previewMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        
+                        onClicked: {
+                            // Use the global texture browser from Main.qml
+                            if (typeof globalTextureBrowser !== 'undefined') {
+                                globalTextureBrowser.targetTextField = textureField
+                                globalTextureBrowser.selectedTexture = ""
+                                globalTextureBrowser.open()
+                            }
+                        }
+                    }
+                    
+                    ToolTip {
+                        visible: previewMouseArea.containsMouse
+                        text: "Click to browse textures"
+                        delay: 500
                     }
                 }
-            }
-            
-            TextField {
-                id: textureField
-                Layout.fillWidth: true
-                text: parameterEntry.value
-                placeholderText: "texture.vtf"
                 
-                onTextChanged: {
-                    root.valueChanged(parameterEntry.name, text)
+                // Text field with ghost autocomplete
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 28
+                    
+                    // Background for the text field
+                    Rectangle {
+                        anchors.fill: parent
+                        color: inputBackground
+                        border.color: textureField.activeFocus ? accent : inputBorder
+                        border.width: 1
+                        radius: 3
+                    }
+                    
+                    // Ghost text (shown behind the input)
+                    Text {
+                        id: ghostText
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.leftMargin: 8
+                        color: "#555555"
+                        font.pixelSize: 13
+                        text: {
+                            if (!textureField.activeFocus || textureField.text.length < 1) return ""
+                            var ghost = app.get_texture_ghost(textureField.text)
+                            if (ghost.length > 0) {
+                                return textureField.text + ghost
+                            }
+                            return ""
+                        }
+                        visible: ghostText.text.length > textureField.text.length
+                    }
+                    
+                    TextField {
+                        id: textureField
+                        anchors.fill: parent
+                        text: parameterEntry.value
+                        placeholderText: "texture path (Tab to autocomplete)"
+                        
+                        property string lastGhost: ""
+                        property bool suppressValueUpdate: false
+                        
+                        onTextChanged: {
+                            // Only update ghost, not the actual value (to avoid loading partial textures)
+                            if (activeFocus && !suppressValueUpdate) {
+                                lastGhost = app.get_texture_ghost(text)
+                                // Show autocomplete popup if we have suggestions
+                                if (text.length >= 2) {
+                                    autocompleteTimer.restart()
+                                }
+                            }
+                        }
+                        
+                        // Commit value on focus loss or Enter
+                        onEditingFinished: {
+                            root.valueChanged(parameterEntry.name, text)
+                        }
+                        
+                        onActiveFocusChanged: {
+                            if (activeFocus) {
+                                lastGhost = app.get_texture_ghost(text)
+                            } else {
+                                autocompletePopup.close()
+                                // Commit the value when losing focus
+                                root.valueChanged(parameterEntry.name, text)
+                            }
+                        }
+                        
+                        Keys.onTabPressed: function(event) {
+                            // Accept ghost completion
+                            if (lastGhost.length > 0) {
+                                suppressValueUpdate = true
+                                text = text + lastGhost
+                                cursorPosition = text.length
+                                suppressValueUpdate = false
+                                lastGhost = app.get_texture_ghost(text)
+                                event.accepted = true
+                            }
+                        }
+                        
+                        Keys.onDownPressed: {
+                            if (autocompletePopup.visible && autocompleteList.count > 0) {
+                                autocompleteList.currentIndex = Math.min(autocompleteList.currentIndex + 1, autocompleteList.count - 1)
+                            }
+                        }
+                        
+                        Keys.onUpPressed: {
+                            if (autocompletePopup.visible && autocompleteList.count > 0) {
+                                autocompleteList.currentIndex = Math.max(autocompleteList.currentIndex - 1, 0)
+                            }
+                        }
+                        
+                        Keys.onReturnPressed: {
+                            if (autocompletePopup.visible && autocompleteList.currentIndex >= 0) {
+                                text = autocompleteList.model[autocompleteList.currentIndex]
+                                autocompletePopup.close()
+                                // Commit the selected value
+                                root.valueChanged(parameterEntry.name, text)
+                            }
+                        }
+                        
+                        Keys.onEscapePressed: {
+                            autocompletePopup.close()
+                        }
+                        
+                        background: Rectangle {
+                            color: "transparent"
+                            border.color: "transparent"
+                        }
+                        
+                        color: textPrimary
+                        font.pixelSize: 13
+                        selectByMouse: true
+                        selectionColor: accent
+                        
+                        Timer {
+                            id: autocompleteTimer
+                            interval: 150
+                            onTriggered: {
+                                if (textureField.text.length >= 2) {
+                                    var completions = app.get_texture_completions(textureField.text, 10)
+                                    if (completions.length > 0) {
+                                        autocompleteList.model = completions
+                                        autocompleteList.currentIndex = 0
+                                        autocompletePopup.open()
+                                    } else {
+                                        autocompletePopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Autocomplete dropdown popup
+                    Popup {
+                        id: autocompletePopup
+                        y: parent.height + 2
+                        width: parent.width
+                        height: Math.min(autocompleteList.contentHeight + 8, 200)
+                        padding: 4
+                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                        
+                        background: Rectangle {
+                            color: panelBackground
+                            border.color: inputBorder
+                            border.width: 1
+                            radius: 3
+                        }
+                        
+                        ListView {
+                            id: autocompleteList
+                            anchors.fill: parent
+                            clip: true
+                            currentIndex: 0
+                            
+                            delegate: Rectangle {
+                                width: autocompleteList.width
+                                height: 24
+                                color: index === autocompleteList.currentIndex ? hoverBackground : "transparent"
+                                
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 8
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: modelData
+                                    color: textPrimary
+                                    font.pixelSize: 12
+                                    elide: Text.ElideMiddle
+                                }
+                                
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onEntered: autocompleteList.currentIndex = index
+                                    onClicked: {
+                                        textureField.text = modelData
+                                        autocompletePopup.close()
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 
-                background: Rectangle {
-                    implicitHeight: 28
-                    color: inputBackground
-                    border.color: textureField.activeFocus ? accent : inputBorder
-                    border.width: 1
-                    radius: 3
-                }
-                
-                color: textPrimary
-                font.pixelSize: 13
-                selectByMouse: true
-                selectionColor: accent
-            }
-            
-            Button {
-                Layout.preferredWidth: 28
-                Layout.preferredHeight: 28
-                text: "..."
-                
-                background: Rectangle {
-                    color: parent.pressed ? hoverBackground : inputBackground
-                    border.color: inputBorder
-                    border.width: 1
-                    radius: 3
-                }
-                
-                contentItem: Text {
-                    text: parent.text
-                    color: textPrimary
-                    font.pixelSize: 13
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                // Browse button
+                Button {
+                    Layout.preferredWidth: 28
+                    Layout.preferredHeight: 28
+                    text: "..."
+                    
+                    onClicked: {
+                        // Use the global texture browser from Main.qml
+                        if (typeof globalTextureBrowser !== 'undefined') {
+                            globalTextureBrowser.targetTextField = textureField
+                            globalTextureBrowser.selectedTexture = ""
+                            globalTextureBrowser.open()
+                        }
+                    }
+                    
+                    background: Rectangle {
+                        color: parent.pressed ? hoverBackground : inputBackground
+                        border.color: inputBorder
+                        border.width: 1
+                        radius: 3
+                    }
+                    
+                    contentItem: Text {
+                        text: parent.text
+                        color: textPrimary
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
         }

@@ -286,6 +286,18 @@ ApplicationWindow {
         }
         
         Menu {
+            title: "Tools"
+            Action { 
+                text: "Texture Browser..."
+                onTriggered: {
+                    globalTextureBrowser.openMode = true
+                    globalTextureBrowser.targetTextField = null
+                    globalTextureBrowser.open()
+                }
+            }
+        }
+        
+        Menu {
             title: "Settings"
             Action { 
                 text: "Select Game..."
@@ -938,6 +950,7 @@ ApplicationWindow {
                                     spacing: 8
                                     
                                     Rectangle {
+                                        id: textureThumbnailRect
                                         Layout.preferredWidth: 40
                                         Layout.preferredHeight: 40
                                         color: root.inputBg
@@ -949,26 +962,25 @@ ApplicationWindow {
                                         property string pendingTexture: ""
                                         property string thumbnailSource: ""
                                         
-                                        Timer {
-                                            id: thumbnailDebounce
-                                            interval: 500  // Wait 500ms after typing stops
-                                            onTriggered: {
-                                                if (parent.pendingTexture.length > 0 && app.materials_root.length > 0) {
-                                                    var result = textureProvider.get_thumbnail_for_texture(parent.pendingTexture, app.materials_root)
-                                                    parent.thumbnailSource = result
-                                                }
+                                        // Function to update thumbnail (called from textureField)
+                                        function updateThumbnail(texturePath) {
+                                            var texPath = (texturePath || "").replace(/\.vtf$/i, "")
+                                            if (texPath !== pendingTexture || thumbnailSource === "") {
+                                                pendingTexture = texPath
+                                                thumbnailSource = ""  // Clear while loading
+                                                thumbnailDebounce.restart()
                                             }
                                         }
                                         
-                                        // Update pending texture when value changes
-                                        Connections {
-                                            target: delegateRoot
-                                            function onPValueChanged() {
-                                                if (delegateRoot.pDataType.toLowerCase() === "texture") {
-                                                    var texPath = (delegateRoot.pValue || "").replace(/\.vtf$/i, "")
-                                                    parent.pendingTexture = texPath
-                                                    parent.thumbnailSource = ""  // Clear while loading
-                                                    thumbnailDebounce.restart()
+                                        Timer {
+                                            id: thumbnailDebounce
+                                            interval: 150  // Wait 150ms after typing stops
+                                            onTriggered: {
+                                                if (textureThumbnailRect.pendingTexture.length > 0 && app.materials_root.length > 0) {
+                                                    var result = textureProvider.get_thumbnail_for_texture(textureThumbnailRect.pendingTexture, app.materials_root)
+                                                    textureThumbnailRect.thumbnailSource = result
+                                                } else {
+                                                    textureThumbnailRect.thumbnailSource = ""
                                                 }
                                             }
                                         }
@@ -988,23 +1000,96 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             anchors.margins: 2
                                             fillMode: Image.PreserveAspectFit
-                                            cache: true
+                                            cache: false  // Don't cache - we want fresh images
                                             asynchronous: true
-                                            source: parent.thumbnailSource
+                                            source: textureThumbnailRect.thumbnailSource
                                             
-                                            // Fallback text when image not loaded
+                                            // Loading spinner
+                                            Item {
+                                                id: loadingSpinner
+                                                anchors.centerIn: parent
+                                                width: 20
+                                                height: 20
+                                                visible: thumbnailDebounce.running || textureThumbnail.status === Image.Loading
+                                                
+                                                Rectangle {
+                                                    anchors.centerIn: parent
+                                                    width: 16
+                                                    height: 16
+                                                    radius: 8
+                                                    color: "transparent"
+                                                    border.width: 2
+                                                    border.color: root.inputBorder
+                                                }
+                                                
+                                                Rectangle {
+                                                    id: spinnerArc
+                                                    anchors.centerIn: parent
+                                                    width: 16
+                                                    height: 16
+                                                    radius: 8
+                                                    color: "transparent"
+                                                    border.width: 2
+                                                    border.color: root.accent
+                                                    
+                                                    // Create arc effect with clip
+                                                    visible: false
+                                                }
+                                                
+                                                // Animated spinner segment
+                                                Canvas {
+                                                    id: spinnerCanvas
+                                                    anchors.centerIn: parent
+                                                    width: 18
+                                                    height: 18
+                                                    
+                                                    property real angle: 0
+                                                    
+                                                    NumberAnimation on angle {
+                                                        from: 0
+                                                        to: 360
+                                                        duration: 1000
+                                                        loops: Animation.Infinite
+                                                        running: loadingSpinner.visible
+                                                    }
+                                                    
+                                                    onAngleChanged: requestPaint()
+                                                    
+                                                    onPaint: {
+                                                        var ctx = getContext("2d")
+                                                        ctx.reset()
+                                                        ctx.strokeStyle = root.accent
+                                                        ctx.lineWidth = 2
+                                                        ctx.lineCap = "round"
+                                                        ctx.beginPath()
+                                                        var startAngle = (angle - 90) * Math.PI / 180
+                                                        var endAngle = (angle + 90) * Math.PI / 180
+                                                        ctx.arc(width/2, height/2, 7, startAngle, endAngle)
+                                                        ctx.stroke()
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // Fallback text when image fails or not set
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: {
-                                                    if (thumbnailDebounce.running) return "..."
-                                                    if (parent.status === Image.Error) return "!"
-                                                    if (parent.status === Image.Loading) return "..."
-                                                    if (!parent.source || parent.source == "") return "?"
-                                                    return "?"
-                                                }
-                                                color: parent.status === Image.Error ? "#ff6b6b" : root.textDim
+                                                text: textureThumbnail.status === Image.Error ? "!" : "?"
+                                                color: textureThumbnail.status === Image.Error ? "#ff6b6b" : root.textDim
                                                 font.pixelSize: 14
-                                                visible: parent.status !== Image.Ready
+                                                visible: !loadingSpinner.visible && textureThumbnail.status !== Image.Ready
+                                            }
+                                        }
+                                        
+                                        // Click to open texture browser
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                globalTextureBrowser.openMode = false
+                                                globalTextureBrowser.targetTextField = textureField
+                                                globalTextureBrowser.selectedTexture = ""
+                                                globalTextureBrowser.open()
                                             }
                                         }
                                     }
@@ -1023,6 +1108,8 @@ ApplicationWindow {
                                                 if (delegateRoot.pName.toLowerCase() === "$basetexture") {
                                                     textureProvider.load_from_material_path(text, app.materials_root)
                                                 }
+                                                // Also update the small thumbnail preview
+                                                textureThumbnailRect.updateThumbnail(text)
                                             }
                                         }
                                         
@@ -2908,6 +2995,652 @@ ApplicationWindow {
                                 }
                                 colorPickerDialog.close()
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // ===== GLOBAL TEXTURE BROWSER =====
+    Popup {
+        id: globalTextureBrowser
+        
+        property var targetTextField: null
+        property string selectedTexture: ""
+        property bool openMode: false  // When true, "Open" loads in preview; when false, "Select" fills text field
+        
+        parent: Overlay.overlay
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: Math.min(parent.width - 40, 900)
+        height: Math.min(parent.height - 40, 700)
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        
+        background: Rectangle {
+            color: root.panelBg
+            border.color: root.panelBorder
+            border.width: 1
+            radius: 8
+        }
+        
+        // Store textures
+        property var allTextures: []
+        property var filteredTextures: []
+        property string selectedCategory: "all"
+        property var categories: ["all", "custom", "brick", "concrete", "metal", "wood", "glass", "nature", "decals", "models", "effects", "other"]
+        
+        onOpened: {
+            loadTextures()
+            searchField.forceActiveFocus()
+        }
+        
+        function loadTextures() {
+            // Get textures from VPK
+            var vpkTextures = app.get_texture_completions("", 5000)
+            allTextures = []
+            
+            // Track paths we've already added to avoid duplicates
+            var addedPaths = {}
+            
+            for (var i = 0; i < vpkTextures.length; i++) {
+                var path = vpkTextures[i]
+                var category = categorizeTexture(path)
+                allTextures.push({
+                    path: path,
+                    category: category,
+                    isCustom: false
+                })
+                addedPaths[path.toLowerCase()] = true
+            }
+            
+            // Get custom textures from disk
+            var customTextures = app.get_custom_textures(2000)
+            for (var j = 0; j < customTextures.length; j++) {
+                var customPath = customTextures[j]
+                // Skip if already added from VPK
+                if (addedPaths[customPath.toLowerCase()]) {
+                    continue
+                }
+                var customCategory = categorizeTexture(customPath)
+                allTextures.push({
+                    path: customPath,
+                    category: customCategory,
+                    isCustom: true
+                })
+                addedPaths[customPath.toLowerCase()] = true
+            }
+            
+            filterTextures()
+        }
+        
+        function categorizeTexture(path) {
+            var lower = path.toLowerCase()
+            if (lower.indexOf("brick") !== -1) return "brick"
+            if (lower.indexOf("concrete") !== -1 || lower.indexOf("concretewall") !== -1) return "concrete"
+            if (lower.indexOf("metal") !== -1) return "metal"
+            if (lower.indexOf("wood") !== -1 || lower.indexOf("plywood") !== -1) return "wood"
+            if (lower.indexOf("glass") !== -1) return "glass"
+            if (lower.indexOf("nature") !== -1 || lower.indexOf("grass") !== -1 || lower.indexOf("dirt") !== -1 || lower.indexOf("rock") !== -1 || lower.indexOf("sand") !== -1) return "nature"
+            if (lower.indexOf("decal") !== -1 || lower.indexOf("overlay") !== -1) return "decals"
+            if (lower.indexOf("models/") !== -1) return "models"
+            if (lower.indexOf("effects") !== -1 || lower.indexOf("sprites") !== -1 || lower.indexOf("particle") !== -1) return "effects"
+            return "other"
+        }
+        
+        function filterTextures() {
+            var searchText = searchField.text.toLowerCase()
+            filteredTextures = []
+            
+            for (var i = 0; i < allTextures.length; i++) {
+                var tex = allTextures[i]
+                
+                // Category filter
+                if (selectedCategory === "custom") {
+                    // Special case: show only custom textures
+                    if (!tex.isCustom) continue
+                } else if (selectedCategory !== "all" && tex.category !== selectedCategory) {
+                    continue
+                }
+                
+                // Search filter
+                if (searchText.length > 0 && tex.path.toLowerCase().indexOf(searchText) === -1) {
+                    continue
+                }
+                
+                filteredTextures.push(tex)
+                
+                // Limit results for performance
+                if (filteredTextures.length >= 500) break
+            }
+            
+            textureGrid.model = filteredTextures
+        }
+        
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 12
+            
+            // Header
+            RowLayout {
+                Layout.fillWidth: true
+                
+                Text {
+                    text: globalTextureBrowser.openMode ? "🖼 Texture Browser - Open" : "🖼 Texture Browser - Select"
+                    color: root.textColor
+                    font.pixelSize: 18
+                    font.bold: true
+                }
+                
+                Item { Layout.fillWidth: true }
+                
+                // Search field
+                Rectangle {
+                    Layout.preferredWidth: 300
+                    Layout.preferredHeight: 32
+                    color: root.inputBg
+                    border.color: searchField.activeFocus ? root.accent : root.inputBorder
+                    border.width: 1
+                    radius: 4
+                    
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        spacing: 8
+                        
+                        Text {
+                            text: "🔍"
+                            color: root.textDim
+                            font.pixelSize: 14
+                        }
+                        
+                        TextField {
+                            id: searchField
+                            Layout.fillWidth: true
+                            placeholderText: "Search textures..."
+                            
+                            onTextChanged: {
+                                searchTimer.restart()
+                            }
+                            
+                            Timer {
+                                id: searchTimer
+                                interval: 200
+                                onTriggered: globalTextureBrowser.filterTextures()
+                            }
+                            
+                            background: Rectangle { color: "transparent" }
+                            color: root.textColor
+                            font.pixelSize: 13
+                        }
+                        
+                        // Clear button
+                        Text {
+                            text: "✕"
+                            color: clearSearchMouse.containsMouse ? root.textColor : root.textDim
+                            font.pixelSize: 12
+                            visible: searchField.text.length > 0
+                            
+                            MouseArea {
+                                id: clearSearchMouse
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: searchField.text = ""
+                            }
+                        }
+                    }
+                }
+                
+                // Close button
+                Rectangle {
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: 4
+                    color: closeBrowserMouse.containsMouse ? "#c42b1c" : root.inputBg
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        color: root.textColor
+                        font.pixelSize: 18
+                    }
+                    
+                    MouseArea {
+                        id: closeBrowserMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: globalTextureBrowser.close()
+                    }
+                }
+            }
+            
+            // Category tabs
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 4
+                
+                Repeater {
+                    model: globalTextureBrowser.categories
+                    
+                    Rectangle {
+                        width: categoryText.implicitWidth + 16
+                        height: 28
+                        radius: 4
+                        color: globalTextureBrowser.selectedCategory === modelData ? root.accent : (categoryMouse.containsMouse ? root.buttonHover : root.buttonBg)
+                        border.color: globalTextureBrowser.selectedCategory === modelData ? root.accent : root.inputBorder
+                        border.width: 1
+                        
+                        Text {
+                            id: categoryText
+                            anchors.centerIn: parent
+                            text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
+                            color: root.textColor
+                            font.pixelSize: 11
+                            font.bold: globalTextureBrowser.selectedCategory === modelData
+                        }
+                        
+                        MouseArea {
+                            id: categoryMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                globalTextureBrowser.selectedCategory = modelData
+                                globalTextureBrowser.filterTextures()
+                            }
+                        }
+                    }
+                }
+                
+                Item { Layout.fillWidth: true }
+                
+                // Results count
+                Text {
+                    text: textureGrid.count + " textures"
+                    color: root.textDim
+                    font.pixelSize: 11
+                }
+            }
+            
+            // Selected texture info bar
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: globalTextureBrowser.selectedTexture ? 40 : 0
+                color: root.inputBg
+                border.color: root.accent
+                border.width: 1
+                radius: 4
+                visible: globalTextureBrowser.selectedTexture !== ""
+                clip: true
+                
+                Behavior on Layout.preferredHeight { NumberAnimation { duration: 150 } }
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    spacing: 8
+                    
+                    Text {
+                        text: "Selected:"
+                        color: root.textDim
+                        font.pixelSize: 12
+                    }
+                    
+                    Text {
+                        Layout.fillWidth: true
+                        text: globalTextureBrowser.selectedTexture
+                        color: root.textColor
+                        font.pixelSize: 12
+                        font.bold: true
+                        elide: Text.ElideMiddle
+                    }
+                    
+                    Rectangle {
+                        width: copyBtn.implicitWidth + 16
+                        height: 24
+                        radius: 3
+                        color: copyMouse.containsMouse ? root.accentHover : root.accent
+                        
+                        Text {
+                            id: copyBtn
+                            anchors.centerIn: parent
+                            text: "📋 Copy"
+                            color: "white"
+                            font.pixelSize: 11
+                        }
+                        
+                        MouseArea {
+                            id: copyMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                // Copy to clipboard (we'd need to implement this in Rust)
+                                console.log("Copy texture path: " + globalTextureBrowser.selectedTexture)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Texture grid
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                
+                GridView {
+                    id: textureGrid
+                    cellWidth: 120
+                    cellHeight: 140
+                    
+                    delegate: Rectangle {
+                        width: 115
+                        height: 135
+                        color: gridItemMouse.containsMouse ? root.buttonHover : "transparent"
+                        border.color: globalTextureBrowser.selectedTexture === modelData.path ? root.accent : (gridItemMouse.containsMouse ? root.accent : "transparent")
+                        border.width: globalTextureBrowser.selectedTexture === modelData.path ? 2 : 1
+                        radius: 6
+                        
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 6
+                            spacing: 4
+                            
+                            // Texture preview
+                            Rectangle {
+                                Layout.preferredWidth: 100
+                                Layout.preferredHeight: 100
+                                Layout.alignment: Qt.AlignHCenter
+                                color: root.inputBg
+                                border.color: root.inputBorder
+                                border.width: 1
+                                radius: 4
+                                
+                                // Thumbnail loading with delay to avoid spamming
+                                property string thumbnailSource: ""
+                                property bool thumbnailRequested: false
+                                
+                                Timer {
+                                    id: thumbnailTimer
+                                    interval: 50 + Math.random() * 100  // Stagger requests
+                                    onTriggered: {
+                                        if (!parent.thumbnailRequested && app.materials_root.length > 0) {
+                                            parent.thumbnailRequested = true
+                                            var result = textureProvider.get_thumbnail_for_texture(modelData.path, app.materials_root)
+                                            if (result.length > 0) {
+                                                parent.thumbnailSource = result
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Component.onCompleted: thumbnailTimer.start()
+                                
+                                Image {
+                                    id: gridThumbnailImage
+                                    anchors.fill: parent
+                                    anchors.margins: 2
+                                    fillMode: Image.PreserveAspectFit
+                                    source: parent.thumbnailSource
+                                    asynchronous: true
+                                    cache: true
+                                    
+                                    // Loading spinner - waiting for thumbnail request
+                                    Item {
+                                        id: waitingSpinner
+                                        anchors.centerIn: parent
+                                        width: 24
+                                        height: 24
+                                        visible: gridThumbnailImage.source === "" && !gridThumbnailImage.parent.thumbnailRequested
+                                        
+                                        Canvas {
+                                            anchors.centerIn: parent
+                                            width: 24
+                                            height: 24
+                                            
+                                            property real angle: 0
+                                            
+                                            NumberAnimation on angle {
+                                                from: 0
+                                                to: 360
+                                                duration: 800
+                                                loops: Animation.Infinite
+                                                running: waitingSpinner.visible
+                                            }
+                                            
+                                            onAngleChanged: requestPaint()
+                                            
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.reset()
+                                                ctx.strokeStyle = root.inputBorder
+                                                ctx.lineWidth = 2
+                                                ctx.beginPath()
+                                                ctx.arc(width/2, height/2, 9, 0, Math.PI * 2)
+                                                ctx.stroke()
+                                                ctx.strokeStyle = root.accent
+                                                ctx.lineCap = "round"
+                                                ctx.beginPath()
+                                                var startAngle = (angle - 90) * Math.PI / 180
+                                                var endAngle = (angle + 90) * Math.PI / 180
+                                                ctx.arc(width/2, height/2, 9, startAngle, endAngle)
+                                                ctx.stroke()
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Loading spinner - image actively loading
+                                    Item {
+                                        id: loadingImageSpinner
+                                        anchors.centerIn: parent
+                                        width: 24
+                                        height: 24
+                                        visible: gridThumbnailImage.status === Image.Loading
+                                        
+                                        Canvas {
+                                            anchors.centerIn: parent
+                                            width: 24
+                                            height: 24
+                                            
+                                            property real angle: 0
+                                            
+                                            NumberAnimation on angle {
+                                                from: 0
+                                                to: 360
+                                                duration: 600
+                                                loops: Animation.Infinite
+                                                running: loadingImageSpinner.visible
+                                            }
+                                            
+                                            onAngleChanged: requestPaint()
+                                            
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.reset()
+                                                ctx.strokeStyle = root.inputBorder
+                                                ctx.lineWidth = 2
+                                                ctx.beginPath()
+                                                ctx.arc(width/2, height/2, 9, 0, Math.PI * 2)
+                                                ctx.stroke()
+                                                ctx.strokeStyle = root.accent
+                                                ctx.lineCap = "round"
+                                                ctx.beginPath()
+                                                var startAngle = (angle - 90) * Math.PI / 180
+                                                var endAngle = (angle + 90) * Math.PI / 180
+                                                ctx.arc(width/2, height/2, 9, startAngle, endAngle)
+                                                ctx.stroke()
+                                            }
+                                        }
+                                    }
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "?"
+                                        color: root.textDim
+                                        font.pixelSize: 24
+                                        visible: gridThumbnailImage.status === Image.Error || gridThumbnailImage.status === Image.Null
+                                    }
+                                }
+                                
+                                // Custom texture badge
+                                Rectangle {
+                                    visible: modelData.isCustom === true
+                                    anchors.top: parent.top
+                                    anchors.right: parent.right
+                                    anchors.margins: 2
+                                    width: 16
+                                    height: 16
+                                    radius: 8
+                                    color: "#4CAF50"
+                                    border.color: "#2E7D32"
+                                    border.width: 1
+                                    
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "C"
+                                        color: "white"
+                                        font.pixelSize: 9
+                                        font.bold: true
+                                    }
+                                    
+                                    ToolTip.visible: customBadgeMouse.containsMouse
+                                    ToolTip.text: "Custom texture (on disk)"
+                                    ToolTip.delay: 500
+                                    
+                                    MouseArea {
+                                        id: customBadgeMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+                                }
+                            }
+                            
+                            // Texture name
+                            Text {
+                                Layout.fillWidth: true
+                                text: {
+                                    var parts = modelData.path.split("/")
+                                    return parts[parts.length - 1]
+                                }
+                                color: root.textColor
+                                font.pixelSize: 10
+                                elide: Text.ElideMiddle
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                        
+                        MouseArea {
+                            id: gridItemMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            
+                            onClicked: {
+                                globalTextureBrowser.selectedTexture = modelData.path
+                            }
+                            
+                            onDoubleClicked: {
+                                globalTextureBrowser.selectedTexture = modelData.path
+                                if (globalTextureBrowser.openMode) {
+                                    // Open mode: load in preview pane
+                                    textureProvider.load_from_material_path(modelData.path, app.materials_root)
+                                } else if (globalTextureBrowser.targetTextField) {
+                                    // Select mode: fill text field
+                                    globalTextureBrowser.targetTextField.text = modelData.path
+                                }
+                                globalTextureBrowser.close()
+                            }
+                        }
+                        
+                        ToolTip {
+                            visible: gridItemMouse.containsMouse
+                            text: modelData.path + (globalTextureBrowser.openMode ? "\nDouble-click to open" : "\nDouble-click to select")
+                            delay: 500
+                        }
+                    }
+                }
+            }
+            
+            // Footer with actions
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                
+                Text {
+                    text: {
+                        if (globalTextureBrowser.selectedTexture) {
+                            return globalTextureBrowser.openMode 
+                                ? "Double-click or press Open to view texture" 
+                                : "Double-click or press Select to use texture"
+                        }
+                        return globalTextureBrowser.openMode 
+                            ? "Click a texture to select, double-click to open" 
+                            : "Click a texture to select, double-click to use"
+                    }
+                    color: root.textDim
+                    font.pixelSize: 11
+                }
+                
+                Item { Layout.fillWidth: true }
+                
+                Rectangle {
+                    width: 80
+                    height: 30
+                    radius: 4
+                    color: cancelMouse.containsMouse ? root.buttonHover : root.buttonBg
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Cancel"
+                        color: root.textColor
+                        font.pixelSize: 12
+                    }
+                    
+                    MouseArea {
+                        id: cancelMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: globalTextureBrowser.close()
+                    }
+                }
+                
+                Rectangle {
+                    width: 80
+                    height: 30
+                    radius: 4
+                    color: selectMouse.containsMouse ? root.accentHover : root.accent
+                    opacity: globalTextureBrowser.selectedTexture ? 1.0 : 0.5
+                    
+                    Text {
+                        anchors.centerIn: parent
+                        text: globalTextureBrowser.openMode ? "Open" : "Select"
+                        color: "white"
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
+                    
+                    MouseArea {
+                        id: selectMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: globalTextureBrowser.selectedTexture ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        enabled: globalTextureBrowser.selectedTexture !== ""
+                        onClicked: {
+                            if (globalTextureBrowser.openMode) {
+                                // Open mode: load in preview pane
+                                textureProvider.load_from_material_path(globalTextureBrowser.selectedTexture, app.materials_root)
+                            } else if (globalTextureBrowser.targetTextField) {
+                                // Select mode: fill text field
+                                globalTextureBrowser.targetTextField.text = globalTextureBrowser.selectedTexture
+                            }
+                            globalTextureBrowser.close()
                         }
                     }
                 }

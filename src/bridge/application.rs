@@ -125,6 +125,42 @@ pub mod qobject {
         // Mark first run as complete
         #[qinvokable]
         fn complete_first_run(self: Pin<&mut SuperVtfApp>);
+
+        // Get VPK archive count for the current game
+        #[qinvokable]
+        fn get_vpk_count(self: &SuperVtfApp) -> i32;
+
+        // Load VPK archives for the current game (returns count of loaded archives)
+        #[qinvokable]
+        fn load_game_vpks(self: &SuperVtfApp) -> i32;
+
+        // List materials available in VPK archives (returns paths like "brick/brickfloor001a")
+        #[qinvokable]
+        fn list_vpk_materials(self: &SuperVtfApp, filter: &QString) -> QStringList;
+
+        // Check if a texture exists (on disk or in VPK)
+        #[qinvokable]
+        fn texture_exists(self: &SuperVtfApp, texture_path: &QString) -> bool;
+
+        // Get autocomplete suggestions for a texture path
+        // Returns a list of suggestions that start with the given prefix
+        #[qinvokable]
+        fn get_texture_completions(self: &SuperVtfApp, prefix: &QString, max_results: i32) -> QStringList;
+
+        // Get the "ghost" completion for a texture path (single best match)
+        // Returns the remaining text to complete the path, or empty if no match
+        #[qinvokable]
+        fn get_texture_ghost(self: &SuperVtfApp, prefix: &QString) -> QString;
+
+        // Test VPK loading with a known HL2 texture
+        // Returns: "OK: <bytes>" on success, "ERR: <message>" on failure
+        #[qinvokable]
+        fn test_vpk_texture(self: &SuperVtfApp, texture_path: &QString) -> QString;
+
+        // Get list of custom textures (loose .vtf files on disk, not in VPK)
+        // Returns a list of texture paths relative to materials folder
+        #[qinvokable]
+        fn get_custom_textures(self: &SuperVtfApp, max_results: i32) -> QStringList;
     }
 
     // Signals
@@ -140,6 +176,7 @@ pub mod qobject {
 }
 
 use crate::schema::ShaderRegistry;
+use crate::vpk_archive::{count_vpk_archives, VPK_MANAGER};
 use crate::vtf::{VtfBuilder, VtfDecoder};
 use qobject::*;
 
@@ -564,6 +601,9 @@ auto_save = {}
                     self.as_mut().set_selected_game(game_name.clone());
                     self.as_mut().save_settings();
                     self.as_mut().settings_changed();
+                    
+                    // Pre-load VPK archives for this game
+                    let _ = VPK_MANAGER.load_game_vpks(std::path::Path::new(parts[1]));
                     return;
                 }
             }
@@ -575,6 +615,419 @@ auto_save = {}
         self.as_mut().set_is_first_run(false);
         self.as_mut().save_settings();
     }
+
+    // Get VPK archive count for the current game
+    fn get_vpk_count(&self) -> i32 {
+        let materials_root = self.materials_root.to_string();
+        if materials_root.is_empty() {
+            return 0;
+        }
+        count_vpk_archives(std::path::Path::new(&materials_root)) as i32
+    }
+
+    // Load VPK archives for the current game
+    fn load_game_vpks(&self) -> i32 {
+        let materials_root = self.materials_root.to_string();
+        if materials_root.is_empty() {
+            return 0;
+        }
+        VPK_MANAGER.load_game_vpks(std::path::Path::new(&materials_root))
+            .unwrap_or(0) as i32
+    }
+
+    // List materials available in VPK archives
+    fn list_vpk_materials(&self, filter: &QString) -> QStringList {
+        let materials_root = self.materials_root.to_string();
+        if materials_root.is_empty() {
+            return QStringList::default();
+        }
+        
+        let filter_str = filter.to_string().to_lowercase();
+        let game_path = std::path::Path::new(&materials_root);
+        
+        // Get all .vmt files from VPK (materials)
+        let files = VPK_MANAGER.list_files(game_path, Some("vmt"));
+        
+        // Filter and format the results
+        let filtered: Vec<cxx_qt_lib::QString> = files
+            .into_iter()
+            .filter(|f| {
+                let lower = f.to_lowercase();
+                // Filter by extension and optional search term
+                lower.starts_with("materials/") && 
+                    (filter_str.is_empty() || lower.contains(&filter_str))
+            })
+            .map(|f| {
+                // Strip "materials/" prefix and ".vmt" suffix for cleaner display
+                let clean = f
+                    .trim_start_matches("materials/")
+                    .trim_end_matches(".vmt");
+                QString::from(clean)
+            })
+            .take(1000) // Limit results to avoid UI freeze
+            .collect();
+        
+        let qlist: cxx_qt_lib::QList<cxx_qt_lib::QString> = filtered.into();
+        QStringList::from(&qlist)
+    }
+
+    // Check if a texture exists (on disk or in VPK)
+    fn texture_exists(&self, texture_path: &QString) -> bool {
+        let texture_path_str = texture_path.to_string();
+        let materials_root = self.materials_root.to_string();
+        
+        if texture_path_str.is_empty() || materials_root.is_empty() {
+            return false;
+        }
+        
+        // Try disk first
+        let mut full_path = PathBuf::from(&materials_root);
+        full_path.push(&texture_path_str);
+        full_path.set_extension("vtf");
+        
+        if full_path.exists() {
+            return true;
+        }
+        
+        // Try with materials/ prefix
+        if !texture_path_str.starts_with("materials/") {
+            let mut alt_path = PathBuf::from(&materials_root);
+            alt_path.push("materials");
+            alt_path.push(&texture_path_str);
+            alt_path.set_extension("vtf");
+            
+            if alt_path.exists() {
+                return true;
+            }
+        }
+        
+        // Check VPK archives
+        let vpk_path = if texture_path_str.starts_with("materials/") {
+            format!("{}.vtf", texture_path_str.replace('\\', "/"))
+        } else {
+            format!("materials/{}.vtf", texture_path_str.replace('\\', "/"))
+        };
+        
+        VPK_MANAGER.file_exists(std::path::Path::new(&materials_root), &vpk_path)
+    }
+
+    // Get autocomplete suggestions for a texture path
+    fn get_texture_completions(&self, prefix: &QString, max_results: i32) -> QStringList {
+        let prefix_str = prefix.to_string().to_lowercase();
+        let materials_root = self.materials_root.to_string();
+        
+        if materials_root.is_empty() {
+            return QStringList::default();
+        }
+        
+        let mut completions: Vec<String> = Vec::new();
+        let game_path = std::path::Path::new(&materials_root);
+        
+        // Search both disk and VPK for matching textures
+        // First, search disk (materials folder)
+        let disk_materials = PathBuf::from(&materials_root).join("materials");
+        if disk_materials.exists() && !prefix_str.is_empty() {
+            self.collect_disk_completions(&disk_materials, &prefix_str, &mut completions, max_results as usize);
+        }
+        
+        // Also check if materials_root itself is a materials folder
+        let direct_search = PathBuf::from(&materials_root);
+        if direct_search.exists() && !direct_search.ends_with("materials") && !prefix_str.is_empty() {
+            self.collect_disk_completions(&direct_search, &prefix_str, &mut completions, max_results as usize);
+        }
+        
+        // Search VPK archives
+        let vpk_files = VPK_MANAGER.list_files(game_path, Some("vtf"));
+        for file in vpk_files {
+            if completions.len() >= max_results as usize {
+                break;
+            }
+            
+            // Strip "materials/" prefix and ".vtf" suffix for cleaner paths
+            let clean_path = file
+                .to_lowercase()
+                .trim_start_matches("materials/")
+                .trim_end_matches(".vtf")
+                .to_string();
+            
+            // Include if prefix is empty (browsing all) or if it matches the prefix
+            let matches = prefix_str.is_empty() || clean_path.starts_with(&prefix_str);
+            if matches && !completions.contains(&clean_path) {
+                completions.push(clean_path);
+            }
+        }
+        
+        // Sort for consistent ordering
+        completions.sort();
+        completions.truncate(max_results as usize);
+        
+        // Convert to QStringList
+        let strings: Vec<cxx_qt_lib::QString> = completions
+            .iter()
+            .map(|s| QString::from(s.as_str()))
+            .collect();
+        let qlist: cxx_qt_lib::QList<cxx_qt_lib::QString> = strings.into();
+        QStringList::from(&qlist)
+    }
+
+    // Get the "ghost" completion - the remaining text for the best match
+    fn get_texture_ghost(&self, prefix: &QString) -> QString {
+        let prefix_str = prefix.to_string();
+        let prefix_lower = prefix_str.to_lowercase();
+        
+        if prefix_str.is_empty() {
+            return QString::default();
+        }
+        
+        let materials_root = self.materials_root.to_string();
+        if materials_root.is_empty() {
+            return QString::default();
+        }
+        
+        let game_path = std::path::Path::new(&materials_root);
+        
+        // Find the first matching path
+        // Check VPK first (usually has more content)
+        let vpk_files = VPK_MANAGER.list_files(game_path, Some("vtf"));
+        
+        for file in &vpk_files {
+            let clean_path = file
+                .trim_start_matches("materials/")
+                .trim_end_matches(".vtf");
+            
+            let clean_lower = clean_path.to_lowercase();
+            
+            if clean_lower.starts_with(&prefix_lower) {
+                // Return the remaining portion (preserving original case)
+                let ghost = &clean_path[prefix_str.len()..];
+                return QString::from(ghost);
+            }
+        }
+        
+        // Check disk as fallback
+        let disk_materials = PathBuf::from(&materials_root).join("materials");
+        if disk_materials.exists() {
+            if let Some(ghost) = self.find_disk_ghost(&disk_materials, &prefix_str) {
+                return QString::from(ghost.as_str());
+            }
+        }
+        
+        QString::default()
+    }
+
+    // Test VPK loading with a specific texture path
+    fn test_vpk_texture(&self, texture_path: &QString) -> QString {
+        let path_str = texture_path.to_string();
+        let materials_root = self.materials_root.to_string();
+        
+        if materials_root.is_empty() {
+            return QString::from("ERR: No materials root set");
+        }
+        
+        // Normalize the path
+        let normalized = path_str.replace('\\', "/");
+        let with_ext = if normalized.to_lowercase().ends_with(".vtf") {
+            normalized
+        } else {
+            format!("{}.vtf", normalized)
+        };
+        
+        let vpk_path = if with_ext.starts_with("materials/") {
+            with_ext
+        } else {
+            format!("materials/{}", with_ext)
+        };
+        
+        eprintln!("[TEST] Testing VPK texture: {}", vpk_path);
+        eprintln!("[TEST] Materials root: {}", materials_root);
+        
+        let game_path = std::path::Path::new(&materials_root);
+        
+        match VPK_MANAGER.read_file(game_path, &vpk_path) {
+            Ok(data) => {
+                let result = format!("OK: Read {} bytes, VTF magic: {:02x}{:02x}{:02x}{:02x}",
+                    data.len(),
+                    data.get(0).unwrap_or(&0),
+                    data.get(1).unwrap_or(&0),
+                    data.get(2).unwrap_or(&0),
+                    data.get(3).unwrap_or(&0));
+                eprintln!("[TEST] {}", result);
+                QString::from(result.as_str())
+            }
+            Err(e) => {
+                let result = format!("ERR: {}", e);
+                eprintln!("[TEST] {}", result);
+                QString::from(result.as_str())
+            }
+        }
+    }
+
+    // Get list of custom textures (loose .vtf files on disk, not in VPK)
+    fn get_custom_textures(&self, max_results: i32) -> QStringList {
+        let materials_root = self.materials_root.to_string();
+        
+        if materials_root.is_empty() {
+            return QStringList::default();
+        }
+        
+        let mut custom_textures: Vec<String> = Vec::new();
+        
+        // Check materials folder under game directory
+        let disk_materials = PathBuf::from(&materials_root).join("materials");
+        if disk_materials.exists() {
+            self.collect_all_disk_textures(&disk_materials, &disk_materials, &mut custom_textures, max_results as usize);
+        }
+        
+        // Also check if materials_root itself contains textures directly
+        let direct_path = PathBuf::from(&materials_root);
+        if direct_path.exists() && !direct_path.ends_with("materials") {
+            // Check for a nested materials folder structure
+            self.collect_all_disk_textures(&direct_path, &direct_path, &mut custom_textures, max_results as usize);
+        }
+        
+        // Sort for consistent ordering
+        custom_textures.sort();
+        custom_textures.truncate(max_results as usize);
+        
+        // Convert to QStringList
+        let strings: Vec<cxx_qt_lib::QString> = custom_textures
+            .iter()
+            .map(|s| QString::from(s.as_str()))
+            .collect();
+        let qlist: cxx_qt_lib::QList<cxx_qt_lib::QString> = strings.into();
+        QStringList::from(&qlist)
+    }
+}
+
+impl SuperVtfAppRust {
+    // Helper: Collect ALL texture files from disk (for browsing, no prefix filter)
+    fn collect_all_disk_textures(&self, dir: &PathBuf, base: &PathBuf, results: &mut Vec<String>, max: usize) {
+        if results.len() >= max {
+            return;
+        }
+        
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if results.len() >= max {
+                    break;
+                }
+                
+                let path = entry.path();
+                
+                if path.is_dir() {
+                    // Recurse into subdirectories
+                    self.collect_all_disk_textures(&path, base, results, max);
+                } else if let Some(ext) = path.extension() {
+                    if ext == "vtf" {
+                        // Get relative path from base
+                        if let Ok(rel_path) = path.strip_prefix(base) {
+                            let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+                            let clean = rel_str.trim_end_matches(".vtf").to_string();
+                            
+                            if !results.contains(&clean) {
+                                results.push(clean);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Helper: Collect texture completions from disk
+    fn collect_disk_completions(&self, base_path: &PathBuf, prefix: &str, completions: &mut Vec<String>, max: usize) {
+        // Walk the materials directory looking for .vtf files
+        if let Ok(walker) = walkdir(base_path, prefix, max - completions.len()) {
+            for entry in walker {
+                if completions.len() >= max {
+                    break;
+                }
+                completions.push(entry);
+            }
+        }
+    }
+    
+    // Helper: Find ghost text from disk
+    fn find_disk_ghost(&self, base_path: &PathBuf, prefix: &str) -> Option<String> {
+        let prefix_lower = prefix.to_lowercase();
+        
+        // Simple recursive search for first match
+        if let Ok(entries) = std::fs::read_dir(base_path) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                
+                if path.is_dir() {
+                    // Build partial path and check if it could match
+                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                        let name_lower = name.to_lowercase();
+                        
+                        // If this directory name starts with our prefix, dive in
+                        if prefix_lower.starts_with(&name_lower) || name_lower.starts_with(&prefix_lower) {
+                            if let Some(ghost) = self.find_disk_ghost(&path, prefix) {
+                                return Some(ghost);
+                            }
+                        }
+                    }
+                } else if let Some(ext) = path.extension() {
+                    if ext == "vtf" {
+                        // Get relative path from materials root
+                        if let Some(rel_path) = path.strip_prefix(base_path).ok() {
+                            let rel_str = rel_path.to_string_lossy();
+                            let clean = rel_str.trim_end_matches(".vtf");
+                            let clean_lower = clean.to_lowercase();
+                            
+                            if clean_lower.starts_with(&prefix_lower) {
+                                return Some(clean[prefix.len()..].to_string());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+}
+
+// Simple directory walker that collects texture paths matching a prefix
+fn walkdir(base: &PathBuf, prefix: &str, max: usize) -> Result<Vec<String>, std::io::Error> {
+    let mut results = Vec::new();
+    let prefix_lower = prefix.to_lowercase();
+    
+    fn walk_recursive(dir: &PathBuf, base: &PathBuf, prefix: &str, results: &mut Vec<String>, max: usize) -> std::io::Result<()> {
+        if results.len() >= max {
+            return Ok(());
+        }
+        
+        for entry in std::fs::read_dir(dir)? {
+            if results.len() >= max {
+                break;
+            }
+            
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.is_dir() {
+                walk_recursive(&path, base, prefix, results, max)?;
+            } else if let Some(ext) = path.extension() {
+                if ext == "vtf" {
+                    if let Some(rel_path) = path.strip_prefix(base).ok() {
+                        let rel_str = rel_path.to_string_lossy().replace('\\', "/");
+                        let clean = rel_str.trim_end_matches(".vtf").to_string();
+                        
+                        if clean.to_lowercase().starts_with(prefix) {
+                            results.push(clean);
+                        }
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    walk_recursive(base, base, &prefix_lower, &mut results, max)?;
+    Ok(results)
 }
 
 // Find a game icon in the resource folder
