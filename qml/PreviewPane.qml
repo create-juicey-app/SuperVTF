@@ -55,7 +55,7 @@ Item {
         return path
     }
     
-    // fuck this too
+    // Convert local path back to file URL
     function localPathToUrl(path) {
         var pathStr = path.toString()
         // Remove any existing file:// prefix first

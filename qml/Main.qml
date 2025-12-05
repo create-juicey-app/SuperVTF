@@ -1019,7 +1019,12 @@ ApplicationWindow {
                                             onTriggered: {
                                                 if (textureThumbnailRect.pendingTexture.length > 0 && app.materials_root.length > 0) {
                                                     var result = textureProvider.get_thumbnail_for_texture(textureThumbnailRect.pendingTexture, app.materials_root)
-                                                    textureThumbnailRect.thumbnailSource = result
+                                                    // Only set if result is a valid file:// URL
+                                                    if (result && result.toString().startsWith("file://")) {
+                                                        textureThumbnailRect.thumbnailSource = result
+                                                    } else {
+                                                        textureThumbnailRect.thumbnailSource = ""
+                                                    }
                                                 } else {
                                                     textureThumbnailRect.thumbnailSource = ""
                                                 }
@@ -1043,7 +1048,7 @@ ApplicationWindow {
                                             fillMode: Image.PreserveAspectFit
                                             cache: false  // Don't cache - we want fresh images
                                             asynchronous: true
-                                            source: textureThumbnailRect.thumbnailSource
+                                            source: textureThumbnailRect.thumbnailSource && textureThumbnailRect.thumbnailSource.startsWith("file://") ? textureThumbnailRect.thumbnailSource : ""
                                             
                                             // Loading spinner
                                             Item {
@@ -3504,7 +3509,8 @@ ApplicationWindow {
                                         if (!parent.thumbnailRequested && app.materials_root.length > 0) {
                                             parent.thumbnailRequested = true
                                             var result = textureProvider.get_thumbnail_for_texture(modelData.path, app.materials_root)
-                                            if (result.length > 0) {
+                                            // Only set source if result is a valid file:// URL
+                                            if (result && result.length > 0 && result.toString().startsWith("file://")) {
                                                 parent.thumbnailSource = result
                                             }
                                         }
@@ -3518,7 +3524,7 @@ ApplicationWindow {
                                     anchors.fill: parent
                                     anchors.margins: 2
                                     fillMode: Image.PreserveAspectFit
-                                    source: parent.thumbnailSource
+                                    source: parent.thumbnailSource && parent.thumbnailSource.startsWith("file://") ? parent.thumbnailSource : ""
                                     asynchronous: true
                                     cache: true
                                     

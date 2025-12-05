@@ -302,19 +302,10 @@ impl qobject::VFileXApp {
 
     // Get default materials root path
     fn get_default_materials_root(&self) -> QString {
-        // Try common Steam paths
-        let steam_paths = [
-            // Linux
-            dirs::home_dir().map(|h| h.join(".steam/steam/steamapps/common")),
-            dirs::home_dir().map(|h| h.join(".local/share/Steam/steamapps/common")),
-            // Windows
-            Some(PathBuf::from(
-                "C:\\Program Files (x86)\\Steam\\steamapps\\common",
-            )),
-            Some(PathBuf::from("C:\\Program Files\\Steam\\steamapps\\common")),
-        ];
+        // Use dynamic Steam library detection
+        let steam_paths = get_steam_library_paths();
 
-        for path in steam_paths.into_iter().flatten() {
+        for path in steam_paths {
             if path.exists() {
                 return QString::from(path.to_string_lossy().as_ref());
             }
@@ -476,19 +467,13 @@ auto_save = {}
             "Portal/portal/materials",
             "Portal 2/portal2/materials",
             "Left 4 Dead 2/left4dead2/materials",
-            "Garry's Mod/garrysmod/materials",
+            "GarrysMod/garrysmod/materials",
         ];
 
-        let steam_paths = [
-            dirs::home_dir().map(|h| h.join(".steam/steam/steamapps/common")),
-            dirs::home_dir().map(|h| h.join(".local/share/Steam/steamapps/common")),
-            Some(PathBuf::from(
-                "C:\\Program Files (x86)\\Steam\\steamapps\\common",
-            )),
-            Some(PathBuf::from("C:\\Program Files\\Steam\\steamapps\\common")),
-        ];
+        // Use the dynamic Steam library detection
+        let steam_paths = get_steam_library_paths();
 
-        for steam_path in steam_paths.into_iter().flatten() {
+        for steam_path in steam_paths {
             if steam_path.exists() {
                 for game in &games {
                     let game_path = steam_path.join(game);
@@ -531,21 +516,13 @@ auto_save = {}
             ("Alien Swarm", "Alien Swarm/swarm", "Alien Swarm/swarm", "Alien Swarm/swarm/resource"),
             
             // Garry's Mod - folder name is "GarrysMod" not "Garry's Mod"
-            ("Garry's Mod", "GarrysMod/garrysmod", "GarrysMod/garrysmod/materials", "GarrysMod/garrysmod/resource"),
+            ("Garry's Mod", "GarrysMod/garrysmod", "GarrysMod/garrysmod", "GarrysMod/garrysmod/resource"),
         ];
 
-        let steam_paths = [
-            dirs::home_dir().map(|h| h.join(".steam/steam/steamapps/common")),
-            dirs::home_dir().map(|h| h.join(".local/share/Steam/steamapps/common")),
-            Some(PathBuf::from("C:\\Program Files (x86)\\Steam\\steamapps\\common")),
-            Some(PathBuf::from("C:\\Program Files\\Steam\\steamapps\\common")),
-            Some(PathBuf::from("D:\\Steam\\steamapps\\common")),
-            Some(PathBuf::from("D:\\SteamLibrary\\steamapps\\common")),
-            Some(PathBuf::from("E:\\Steam\\steamapps\\common")),
-            Some(PathBuf::from("E:\\SteamLibrary\\steamapps\\common")),
-        ];
+        // Get all Steam library paths dynamically
+        let steam_paths = get_steam_library_paths();
 
-        for steam_path in steam_paths.into_iter().flatten() {
+        for steam_path in steam_paths {
             if steam_path.exists() {
                 for (name, rel_check, rel_materials, rel_resource) in &games {
                     // Skip if we already found this game
@@ -1069,6 +1046,170 @@ fn find_game_icon(resource_path: &PathBuf) -> Option<String> {
     }
     
     None
+}
+
+// Get all Steam library paths (works on Windows and Linux)
+fn get_steam_library_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    
+    // On Windows, try to read Steam install path from registry
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+        
+        // Try to find Steam install path from registry
+        if let Ok(hklm) = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey("SOFTWARE\\WOW6432Node\\Valve\\Steam")
+            .or_else(|_| RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey("SOFTWARE\\Valve\\Steam"))
+        {
+            if let Ok(install_path) = hklm.get_value::<String, _>("InstallPath") {
+                let steam_path = PathBuf::from(&install_path);
+                if steam_path.exists() {
+                    // Add main Steam library
+                    let common_path = steam_path.join("steamapps").join("common");
+                    if common_path.exists() {
+                        paths.push(common_path);
+                    }
+                    
+                    // Parse libraryfolders.vdf to find additional library paths
+                    let vdf_path = steam_path.join("steamapps").join("libraryfolders.vdf");
+                    if let Some(mut lib_paths) = parse_library_folders_vdf(&vdf_path) {
+                        paths.append(&mut lib_paths);
+                    }
+                }
+            }
+        }
+        
+        // Also try current user registry
+        if let Ok(hkcu) = RegKey::predef(HKEY_CURRENT_USER)
+            .open_subkey("SOFTWARE\\Valve\\Steam")
+        {
+            if let Ok(steam_path_str) = hkcu.get_value::<String, _>("SteamPath") {
+                let steam_path = PathBuf::from(&steam_path_str);
+                let common_path = steam_path.join("steamapps").join("common");
+                if common_path.exists() && !paths.contains(&common_path) {
+                    paths.push(common_path.clone());
+                    
+                    // Parse libraryfolders.vdf
+                    let vdf_path = steam_path.join("steamapps").join("libraryfolders.vdf");
+                    if let Some(lib_paths) = parse_library_folders_vdf(&vdf_path) {
+                        for p in lib_paths {
+                            if !paths.contains(&p) {
+                                paths.push(p);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // On Linux, check common Steam paths
+    #[cfg(not(target_os = "windows"))]
+    {
+        let linux_steam_paths = [
+            dirs::home_dir().map(|h| h.join(".steam/steam")),
+            dirs::home_dir().map(|h| h.join(".local/share/Steam")),
+            dirs::home_dir().map(|h| h.join("snap/steam/common/.steam/steam")), // Snap Steam
+            dirs::home_dir().map(|h| h.join(".var/app/com.valvesoftware.Steam/.steam/steam")), // Flatpak Steam
+        ];
+        
+        for steam_path in linux_steam_paths.into_iter().flatten() {
+            if steam_path.exists() {
+                let common_path = steam_path.join("steamapps/common");
+                if common_path.exists() && !paths.contains(&common_path) {
+                    paths.push(common_path);
+                }
+                
+                // Parse libraryfolders.vdf
+                let vdf_path = steam_path.join("steamapps/libraryfolders.vdf");
+                if let Some(lib_paths) = parse_library_folders_vdf(&vdf_path) {
+                    for p in lib_paths {
+                        if !paths.contains(&p) {
+                            paths.push(p);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fallback: check common hardcoded paths if nothing was found
+    #[cfg(target_os = "windows")]
+    if paths.is_empty() {
+        let fallback_paths = [
+            PathBuf::from("C:\\Program Files (x86)\\Steam\\steamapps\\common"),
+            PathBuf::from("C:\\Program Files\\Steam\\steamapps\\common"),
+            PathBuf::from("D:\\Steam\\steamapps\\common"),
+            PathBuf::from("D:\\SteamLibrary\\steamapps\\common"),
+            PathBuf::from("E:\\Steam\\steamapps\\common"),
+            PathBuf::from("E:\\SteamLibrary\\steamapps\\common"),
+            PathBuf::from("F:\\Steam\\steamapps\\common"),
+            PathBuf::from("F:\\SteamLibrary\\steamapps\\common"),
+        ];
+        
+        for p in fallback_paths {
+            if p.exists() && !paths.contains(&p) {
+                paths.push(p);
+            }
+        }
+    }
+    
+    paths
+}
+
+// Parse Steam's libraryfolders.vdf to get additional library paths
+fn parse_library_folders_vdf(vdf_path: &PathBuf) -> Option<Vec<PathBuf>> {
+    let content = std::fs::read_to_string(vdf_path).ok()?;
+    let mut paths = Vec::new();
+    
+    // Simple VDF parsing - look for "path" keys
+    // VDF format is like:
+    // "libraryfolders"
+    // {
+    //     "0"
+    //     {
+    //         "path"    "C:\\Program Files (x86)\\Steam"
+    //         ...
+    //     }
+    //     "1"
+    //     {
+    //         "path"    "D:\\SteamLibrary"
+    //         ...
+    //     }
+    // }
+    
+    for line in content.lines() {
+        let trimmed = line.trim();
+        
+        // Look for "path" entries
+        if trimmed.starts_with("\"path\"") {
+            // Extract the path value
+            let parts: Vec<&str> = trimmed.splitn(2, "\"path\"").collect();
+            if parts.len() == 2 {
+                let value_part = parts[1].trim();
+                // Remove surrounding quotes and unescape
+                if let Some(path_str) = value_part.strip_prefix('"') {
+                    if let Some(path_str) = path_str.strip_suffix('"') {
+                        // Unescape backslashes
+                        let clean_path = path_str.replace("\\\\", "\\");
+                        let lib_path = PathBuf::from(&clean_path);
+                        let common_path = lib_path.join("steamapps").join("common");
+                        if common_path.exists() {
+                            paths.push(common_path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if paths.is_empty() {
+        None
+    } else {
+        Some(paths)
+    }
 }
 
 // Extract a string value from a TOML line

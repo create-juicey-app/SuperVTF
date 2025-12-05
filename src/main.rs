@@ -45,6 +45,15 @@ fn main() {
     }
     }
 
+    // Force Fusion style on Windows to allow control customization
+    // The native Windows style doesn't support background/contentItem/indicator customization
+    #[cfg(target_os = "windows")]
+    {
+        unsafe {
+            env::set_var("QT_QUICK_CONTROLS_STYLE", "Fusion");
+        }
+    }
+
     let mut app = QGuiApplication::new();
 
     bridge::set_application_icon(":/media/icon.png");

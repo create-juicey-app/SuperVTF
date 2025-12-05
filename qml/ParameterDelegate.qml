@@ -818,7 +818,8 @@ Item {
                     function updateThumbnail() {
                         if (parameterEntry.value && typeof textureProvider !== 'undefined' && typeof app !== 'undefined' && app.materials_root.length > 0) {
                             var result = textureProvider.get_thumbnail_for_texture(parameterEntry.value, app.materials_root)
-                            if (result.length > 0) {
+                            // Only set if result is a valid file:// URL
+                            if (result && result.toString().startsWith("file://")) {
                                 thumbnailSource = result
                             } else {
                                 thumbnailSource = ""
@@ -842,7 +843,7 @@ Item {
                         anchors.fill: parent
                         anchors.margins: 2
                         fillMode: Image.PreserveAspectFit
-                        source: texturePreviewRect.thumbnailSource
+                        source: texturePreviewRect.thumbnailSource && texturePreviewRect.thumbnailSource.startsWith("file://") ? texturePreviewRect.thumbnailSource : ""
                         
                         Text {
                             anchors.centerIn: parent
