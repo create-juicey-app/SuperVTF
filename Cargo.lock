@@ -3,6 +3,29 @@
 version = 4
 
 [[package]]
+name = "VFileX"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "byteorder",
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "dirs",
+ "image",
+ "keyvalues-parser",
+ "keyvalues-serde",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "toml",
+ "vpk",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1336,29 +1359,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "supervtf"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "bitflags",
- "byteorder",
- "cxx",
- "cxx-qt",
- "cxx-qt-build",
- "cxx-qt-lib",
- "dirs",
- "image",
- "keyvalues-parser",
- "keyvalues-serde",
- "once_cell",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "toml",
- "vpk",
-]
 
 [[package]]
 name = "syn"
