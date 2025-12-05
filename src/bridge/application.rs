@@ -134,6 +134,10 @@ pub mod qobject {
         #[qinvokable]
         fn load_game_vpks(self: &VFileXApp) -> i32;
 
+        // Start async VPK loading for a game (non-blocking)
+        #[qinvokable]
+        fn start_async_vpk_load(self: Pin<&mut VFileXApp>, game_path: &QString);
+
         // List materials available in VPK archives (returns paths like "brick/brickfloor001a")
         #[qinvokable]
         fn list_vpk_materials(self: &VFileXApp, filter: &QString) -> QStringList;
@@ -172,6 +176,18 @@ pub mod qobject {
         // Emitted on status message
         #[qsignal]
         fn status_message(self: Pin<&mut VFileXApp>, message: QString);
+
+        // Emitted when VPK loading starts
+        #[qsignal]
+        fn vpk_loading_started(self: Pin<&mut VFileXApp>);
+
+        // Emitted when VPK loading completes
+        #[qsignal]
+        fn vpk_loading_finished(self: Pin<&mut VFileXApp>, count: i32);
+
+        // Emitted during VPK loading progress
+        #[qsignal]
+        fn vpk_loading_progress(self: Pin<&mut VFileXApp>, message: QString);
     }
 }
 
@@ -574,13 +590,14 @@ auto_save = {}
                 let parts: Vec<&str> = entry_str.split('|').collect();
                 if parts.len() >= 2 && parts[0] == game_name_str {
                     // parts[1] is the materials path
-                    self.as_mut().set_materials_root(QString::from(parts[1]));
+                    let game_path = QString::from(parts[1]);
+                    self.as_mut().set_materials_root(game_path.clone());
                     self.as_mut().set_selected_game(game_name.clone());
                     self.as_mut().save_settings();
                     self.as_mut().settings_changed();
                     
-                    // Pre-load VPK archives for this game
-                    let _ = VPK_MANAGER.load_game_vpks(std::path::Path::new(parts[1]));
+                    // Start async VPK loading (signals will be emitted)
+                    self.as_mut().start_async_vpk_load(&game_path);
                     return;
                 }
             }
@@ -610,6 +627,37 @@ auto_save = {}
         }
         VPK_MANAGER.load_game_vpks(std::path::Path::new(&materials_root))
             .unwrap_or(0) as i32
+    }
+
+    // Start async VPK loading (non-blocking)
+    fn start_async_vpk_load(mut self: Pin<&mut Self>, game_path: &QString) {
+        let game_path_str = game_path.to_string();
+        if game_path_str.is_empty() {
+            return;
+        }
+        
+        // Emit loading started signal
+        self.as_mut().vpk_loading_started();
+        
+        // Check if already loaded in cache (fast path)
+        {
+            let path = std::path::Path::new(&game_path_str);
+            if VPK_MANAGER.is_loaded(path) {
+                let count = VPK_MANAGER.get_archive_count(path) as i32;
+                self.as_mut().vpk_loading_finished(count);
+                return;
+            }
+        }
+        
+        // For now, just load synchronously but emit progress
+        // TODO: In a real async implementation, this would spawn a thread
+        // and use Qt's queued connections to emit signals from the thread
+        self.as_mut().vpk_loading_progress(QString::from("Loading VPK archives..."));
+        
+        let count = VPK_MANAGER.load_game_vpks(std::path::Path::new(&game_path_str))
+            .unwrap_or(0) as i32;
+        
+        self.as_mut().vpk_loading_finished(count);
     }
 
     // List materials available in VPK archives
@@ -1031,7 +1079,7 @@ fn find_game_icon(resource_path: &PathBuf) -> Option<String> {
     for icon_name in &icon_names {
         let icon_path = resource_path.join(icon_name);
         if icon_path.exists() {
-            return Some(format!("file://{}", icon_path.to_string_lossy()));
+            return Some(path_to_file_url(&icon_path));
         }
     }
     
@@ -1040,12 +1088,32 @@ fn find_game_icon(resource_path: &PathBuf) -> Option<String> {
         for icon_name in &icon_names {
             let icon_path = parent.join(icon_name);
             if icon_path.exists() {
-                return Some(format!("file://{}", icon_path.to_string_lossy()));
+                return Some(path_to_file_url(&icon_path));
             }
         }
     }
     
     None
+}
+
+/// Convert a local file path to a proper file:// URL
+/// On Windows: C:\path\to\file -> file:///C:/path/to/file
+/// On Unix: /path/to/file -> file:///path/to/file
+fn path_to_file_url(path: &std::path::Path) -> String {
+    let path_str = path.to_string_lossy();
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Windows paths need file:/// with forward slashes
+        let normalized = path_str.replace('\\', "/");
+        format!("file:///{}", normalized)
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix paths already start with /, so file:// + /path = file:///path
+        format!("file://{}", path_str)
+    }
 }
 
 // Get all Steam library paths (works on Windows and Linux)

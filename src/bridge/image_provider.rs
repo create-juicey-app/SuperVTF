@@ -18,6 +18,33 @@ macro_rules! tex_log {
     };
 }
 
+/// Convert a local file path to a proper file:// URL
+/// On Windows: C:\path\to\file -> file:///C:/path/to/file
+/// On Unix: /path/to/file -> file:///path/to/file
+fn path_to_file_url(path: &Path) -> String {
+    let path_str = path.to_string_lossy();
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Windows paths need file:/// with forward slashes
+        let normalized = path_str.replace('\\', "/");
+        format!("file:///{}", normalized)
+    }
+    
+    #[cfg(not(target_os = "windows"))]
+    {
+        // Unix paths already start with /, so file:// + /path = file:///path
+        format!("file://{}", path_str)
+    }
+}
+
+/// Logging helper for texture operations
+macro_rules! tex_log {
+    ($($arg:tt)*) => {
+        eprintln!("[Texture] {}", format!($($arg)*));
+    };
+}
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -319,7 +346,7 @@ impl qobject::TextureProvider {
 
         // Return cached thumbnail if it exists (fast path - no I/O except stat)
         if thumbnail_path.exists() {
-            return QString::from(format!("file://{}", thumbnail_path.to_string_lossy()).as_str());
+            return QString::from(path_to_file_url(&thumbnail_path).as_str());
         }
 
         // Try to find and load the texture from disk first
@@ -402,7 +429,7 @@ impl qobject::TextureProvider {
         match vtf.decode(mipmap_level, 0) {
             Ok(decoded) => {
                 if decoded.save(thumbnail_path.to_str().unwrap_or("")).is_ok() {
-                    QString::from(format!("file://{}", thumbnail_path.to_string_lossy()).as_str())
+                    QString::from(path_to_file_url(thumbnail_path).as_str())
                 } else {
                     QString::default()
                 }

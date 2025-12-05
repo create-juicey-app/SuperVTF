@@ -123,7 +123,7 @@ Item {
         panAnimDisableTimer.restart()
     }
     
-    // Timer to disable pan animation after programmatic reset
+    
     Timer {
         id: panAnimDisableTimer
         interval: 250

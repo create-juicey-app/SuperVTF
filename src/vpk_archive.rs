@@ -79,6 +79,18 @@ impl VpkManager {
         }
     }
 
+    /// Check if VPKs for a game directory are already loaded
+    pub fn is_loaded(&self, game_dir: &Path) -> bool {
+        let archives = self.archives.read().unwrap();
+        archives.contains_key(game_dir)
+    }
+
+    /// Get the count of loaded VPK archives for a game directory
+    pub fn get_archive_count(&self, game_dir: &Path) -> usize {
+        let archives = self.archives.read().unwrap();
+        archives.get(game_dir).map(|v| v.len()).unwrap_or(0)
+    }
+
     /// Load all VPK archives for a game directory
     /// 
     /// # Arguments

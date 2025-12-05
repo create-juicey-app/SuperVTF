@@ -2372,6 +2372,29 @@ ApplicationWindow {
         
         property var detectedGames: []
         property int selectedIndex: -1
+        property bool isLoadingVPKs: false
+        property string loadingMessage: ""
+        
+        // Connect to VPK loading signals
+        Connections {
+            target: app
+            function onVpk_loading_started() {
+                welcomeDialog.isLoadingVPKs = true
+                welcomeDialog.loadingMessage = "Loading game archives..."
+            }
+            function onVpk_loading_progress(message) {
+                welcomeDialog.loadingMessage = message
+            }
+            function onVpk_loading_finished(count) {
+                welcomeDialog.isLoadingVPKs = false
+                welcomeDialog.loadingMessage = ""
+                // Auto-close if loading finished successfully
+                if (count > 0) {
+                    app.complete_first_run()
+                    welcomeDialog.close()
+                }
+            }
+        }
         
         function loadDetectedGames() {
             detectedGames = []
@@ -2679,28 +2702,71 @@ ApplicationWindow {
                     
                     Button {
                         id: continueButton
-                        text: "Continue"
-                        enabled: welcomeDialog.selectedIndex >= 0 || manualPathField.text.length > 0
+                        text: welcomeDialog.isLoadingVPKs ? "Loading..." : "Continue"
+                        enabled: !welcomeDialog.isLoadingVPKs && (welcomeDialog.selectedIndex >= 0 || manualPathField.text.length > 0)
                         onClicked: {
                             if (welcomeDialog.selectedIndex >= 0 && welcomeDialog.detectedGames.length > 0) {
                                 var game = welcomeDialog.detectedGames[welcomeDialog.selectedIndex]
                                 app.select_game(game.name)
+                                // Don't close here - wait for vpk_loading_finished signal
+                            } else {
+                                // Manual path - just complete and close
+                                app.complete_first_run()
+                                welcomeDialog.close()
                             }
-                            app.complete_first_run()
-                            welcomeDialog.close()
                         }
                         
                         // Smooth hover animation
                         scale: hovered ? 1.03 : (pressed ? 0.97 : 1.0)
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         
-                        contentItem: Text {
-                            text: continueButton.text
-                            font.pixelSize: 13
-                            font.bold: true
-                            color: continueButton.enabled ? "white" : root.textDim
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        contentItem: Row {
+                            spacing: 8
+                            anchors.centerIn: parent
+                            
+                            // Loading spinner
+                            Item {
+                                width: 16
+                                height: 16
+                                visible: welcomeDialog.isLoadingVPKs
+                                anchors.verticalCenter: parent.verticalCenter
+                                
+                                Canvas {
+                                    anchors.fill: parent
+                                    property real angle: 0
+                                    
+                                    NumberAnimation on angle {
+                                        from: 0
+                                        to: 360
+                                        duration: 800
+                                        loops: Animation.Infinite
+                                        running: welcomeDialog.isLoadingVPKs
+                                    }
+                                    
+                                    onAngleChanged: requestPaint()
+                                    
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.reset()
+                                        ctx.strokeStyle = "white"
+                                        ctx.lineWidth = 2
+                                        ctx.lineCap = "round"
+                                        ctx.beginPath()
+                                        var startAngle = (angle - 90) * Math.PI / 180
+                                        var endAngle = (angle + 90) * Math.PI / 180
+                                        ctx.arc(width/2, height/2, 6, startAngle, endAngle)
+                                        ctx.stroke()
+                                    }
+                                }
+                            }
+                            
+                            Text {
+                                text: continueButton.text
+                                font.pixelSize: 13
+                                font.bold: true
+                                color: continueButton.enabled ? "white" : root.textDim
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
                         }
                         
                         background: Rectangle {
@@ -2711,6 +2777,16 @@ ApplicationWindow {
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         }
                     }
+                }
+                
+                // Loading message below buttons
+                Text {
+                    visible: welcomeDialog.isLoadingVPKs && welcomeDialog.loadingMessage.length > 0
+                    Layout.fillWidth: true
+                    text: welcomeDialog.loadingMessage
+                    color: root.textDim
+                    font.pixelSize: 11
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
         }
