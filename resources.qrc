@@ -2,5 +2,44 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>media/icon.png</file>
+        <file>media/arrow-down.svg</file>
+        <file>media/arrow-left.svg</file>
+        <file>media/arrow-right.svg</file>
+    <file>media/nav-arrow.svg</file>
+        <file>media/arrow-up.svg</file>
+        <file>media/camera.svg</file>
+        <file>media/check.svg</file>
+        <file>media/close.svg</file>
+        <file>media/color-picker.svg</file>
+        <file>media/download.svg</file>
+        <file>media/export.svg</file>
+        <file>media/eye-off.svg</file>
+        <file>media/eye.svg</file>
+        <file>media/file-new.svg</file>
+        <file>media/file-open.svg</file>
+        <file>media/fit-screen.svg</file>
+        <file>media/folder.svg</file>
+        <file>media/gamepad.svg</file>
+        <file>media/help.svg</file>
+        <file>media/image.svg</file>
+        <file>media/import.svg</file>
+        <file>media/info.svg</file>
+        <file>media/layers.svg</file>
+        <file>media/minus.svg</file>
+        <file>media/multiply.svg</file>
+        <file>media/palette.svg</file>
+        <file>media/play-solid.svg</file>
+        <file>media/play.svg</file>
+        <file>media/plus.svg</file>
+        <file>media/refresh.svg</file>
+        <file>media/save-as.svg</file>
+        <file>media/save.svg</file>
+        <file>media/search.svg</file>
+        <file>media/settings.svg</file>
+        <file>media/star-outline.svg</file>
+        <file>media/star.svg</file>
+        <file>media/texture.svg</file>
+        <file>media/warning.svg</file>
+    <file>media/clipboard.svg</file>
     </qresource>
 </RCC>

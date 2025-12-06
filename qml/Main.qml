@@ -61,9 +61,15 @@ ApplicationWindow {
     readonly property int animEasingBounce: Easing.OutBack  // Slight overshoot for playfulness
 
     // Notification system
-    function showNotification(message, bgColor) {
+    function showNotification(message, bgColor, iconSrc) {
         notificationText.text = message
         notificationBg.color = bgColor || root.accent
+        if (iconSrc && iconSrc !== "") {
+            notificationIcon.source = iconSrc
+            notificationIcon.visible = true
+        } else {
+            notificationIcon.visible = false
+        }
         notificationPopup.open()
         notificationTimer.restart()
     }
@@ -382,15 +388,29 @@ ApplicationWindow {
         contentItem: Rectangle {
             color: "transparent"
             
-            Text {
-                id: notificationText
-                anchors.centerIn: parent
-                text: ""
-                color: "white"
-                font.pixelSize: 13
-                font.bold: true
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 8
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                
+                Image {
+                    id: notificationIcon
+                    width: 18; height: 18
+                    visible: false
+                    fillMode: Image.PreserveAspectFit
+                }
+                
+                Text {
+                    id: notificationText
+                    text: ""
+                    color: "white"
+                    font.pixelSize: 13
+                    font.bold: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
             }
         }
         
@@ -502,12 +522,13 @@ ApplicationWindow {
                                 verticalAlignment: Text.AlignVCenter
                             }
                             
-                            indicator: Text {
+                            indicator: Image {
                                 x: parent.width - width - 12
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: "▼"
-                                color: root.textDim
-                                font.pixelSize: 10
+                                width: 10
+                                height: 10
+                                source: "qrc:/media/nav-arrow.svg"
+                                sourceSize: Qt.size(10, 10)
                             }
                             
                             delegate: ItemDelegate {
@@ -539,14 +560,15 @@ ApplicationWindow {
                                     }
                                     
                                     // Category indicator
-                                    Text {
+                                    Image {
                                         anchors.left: parent.left
-                                        anchors.leftMargin: 8
+                                        anchors.leftMargin: 6
                                         anchors.verticalCenter: parent.verticalCenter
+                                        width: 12
+                                        height: 12
                                         visible: shaderDelegate.isFirstInCategory
-                                        text: shaderDelegate.model.category === "Common" ? "★" : "○"
-                                        color: shaderDelegate.model.category === "Common" ? "#f1c40f" : root.textDim
-                                        font.pixelSize: 10
+                                        source: shaderDelegate.model.category === "Common" ? "qrc:/media/star.svg" : "qrc:/media/star-outline.svg"
+                                        sourceSize: Qt.size(12, 12)
                                     }
                                     
                                     // Shader name
@@ -690,10 +712,11 @@ ApplicationWindow {
                                 anchors.verticalCenterOffset: -4
                                 spacing: 6
                                 
-                                Text {
-                                    text: "▶"
-                                    color: root.textDim
-                                    font.pixelSize: 10
+                                Image {
+                                    width: 10
+                                    height: 10
+                                    source: "qrc:/media/nav-arrow.svg"
+                                    sourceSize: Qt.size(10, 10)
                                     
                                     // Smooth rotation for expand/collapse icon
                                     rotation: root.isCategoryCollapsed(section) ? 0 : 90
@@ -1822,12 +1845,23 @@ ApplicationWindow {
                 height: 48
                 color: root.panelBg
                 
-                Text {
+                RowLayout {
                     anchors.centerIn: parent
-                    text: "New Material"
-                    color: root.textColor
-                    font.pixelSize: 15
-                    font.bold: true
+                    spacing: 8
+                    
+                    Image {
+                        width: 18
+                        height: 18
+                        source: "qrc:/media/file-new.svg"
+                        sourceSize: Qt.size(18, 18)
+                    }
+                    
+                    Text {
+                        text: "New Material"
+                        color: root.textColor
+                        font.pixelSize: 15
+                        font.bold: true
+                    }
                 }
                 
                 Rectangle {
@@ -1887,12 +1921,13 @@ ApplicationWindow {
                         elide: Text.ElideRight
                     }
                     
-                    indicator: Text {
+                    indicator: Image {
                         x: parent.width - width - 12
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "▼"
-                        color: root.textDim
-                        font.pixelSize: 10
+                        width: 10
+                        height: 10
+                        source: "qrc:/media/nav-arrow.svg"
+                        sourceSize: Qt.size(10, 10)
                     }
                     
                     delegate: ItemDelegate {
@@ -1925,14 +1960,15 @@ ApplicationWindow {
                             }
                             
                             // Category label (small, on the left)
-                            Text {
+                            Image {
                                 anchors.left: parent.left
-                                anchors.leftMargin: 8
+                                anchors.leftMargin: 6
                                 anchors.verticalCenter: parent.verticalCenter
+                                width: 12
+                                height: 12
                                 visible: newShaderDelegate.isFirstInCategory
-                                text: newShaderDelegate.model.category === "Common" ? "★" : "○"
-                                color: newShaderDelegate.model.category === "Common" ? "#f1c40f" : root.textDim
-                                font.pixelSize: 10
+                                source: newShaderDelegate.model.category === "Common" ? "qrc:/media/star.svg" : "qrc:/media/star-outline.svg"
+                                sourceSize: Qt.size(12, 12)
                             }
                             
                             // Shader name
@@ -2521,11 +2557,19 @@ ApplicationWindow {
                 
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 4
+                    spacing: 8
+                    
+                    Image {
+                        Layout.alignment: Qt.AlignHCenter
+                        width: 32
+                        height: 32
+                        source: "qrc:/media/settings.svg"
+                        sourceSize: Qt.size(32, 32)
+                    }
                     
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "👋 Welcome to VFileX!"
+                        text: "Welcome to VFileX!"
                         font.pixelSize: 22
                         font.bold: true
                         color: "white"
@@ -2609,11 +2653,13 @@ ApplicationWindow {
                                         mipmap: true
                                     }
                                     
-                                    // Fallback emoji when no icon
-                                    Text {
+                                    // Fallback icon when no game icon
+                                    Image {
                                         anchors.centerIn: parent
-                                        text: "🎮"
-                                        font.pixelSize: 24
+                                        width: 24
+                                        height: 24
+                                        source: "qrc:/media/gamepad.svg"
+                                        sourceSize: Qt.size(24, 24)
                                         visible: gameIcon.status !== Image.Ready
                                     }
                                 }
@@ -2641,12 +2687,13 @@ ApplicationWindow {
                                 }
                                 
                                 // Checkmark when selected
-                                Text {
+                                Image {
                                     Layout.alignment: Qt.AlignVCenter
-                                    text: welcomeDialog.selectedIndex === index ? "✓" : ""
-                                    font.pixelSize: 18
-                                    font.bold: true
-                                    color: "white"
+                                    width: 18
+                                    height: 18
+                                    visible: welcomeDialog.selectedIndex === index
+                                    source: "qrc:/media/check.svg"
+                                    sourceSize: Qt.size(18, 18)
                                 }
                             }
                             
@@ -2679,17 +2726,19 @@ ApplicationWindow {
                         anchors.rightMargin: 12
                         spacing: 12
                         
-                        // Folder icon placeholder
+                        // Folder icon
                         Rectangle {
                             Layout.preferredWidth: 36
                             Layout.preferredHeight: 36
                             Layout.alignment: Qt.AlignVCenter
                             color: "transparent"
                             
-                            Text {
+                            Image {
                                 anchors.centerIn: parent
-                                text: "📁"
-                                font.pixelSize: 24
+                                width: 24
+                                height: 24
+                                source: "qrc:/media/folder.svg"
+                                sourceSize: Qt.size(24, 24)
                             }
                         }
                         
@@ -2946,6 +2995,14 @@ ApplicationWindow {
                     anchors.fill: parent
                     anchors.leftMargin: 16
                     anchors.rightMargin: 16
+                    spacing: 8
+                    
+                    Image {
+                        width: 18
+                        height: 18
+                        source: "qrc:/media/export.svg"
+                        sourceSize: Qt.size(18, 18)
+                    }
                     
                     Text {
                         text: "Image to VTF Converter"
@@ -2962,11 +3019,12 @@ ApplicationWindow {
                         radius: 14
                         color: vtfCloseBtn.containsMouse ? root.buttonHover : "transparent"
                         
-                        Text {
+                        Image {
                             anchors.centerIn: parent
-                            text: "✕"
-                            color: root.textDim
-                            font.pixelSize: 14
+                            width: 12
+                            height: 12
+                            source: "qrc:/media/close.svg"
+                            sourceSize: Qt.size(12, 12)
                         }
                         
                         MouseArea {
@@ -3043,9 +3101,11 @@ ApplicationWindow {
                                         verticalAlignment: Text.AlignVCenter
                                     }
                                     
-                                    Text {
-                                        text: "📁"
-                                        font.pixelSize: 14
+                                    Image {
+                                        width: 14
+                                        height: 14
+                                        source: "qrc:/media/folder.svg"
+                                        sourceSize: Qt.size(14, 14)
                                     }
                                 }
                                 
@@ -3124,7 +3184,7 @@ ApplicationWindow {
                                     }
                                 }
                                 
-                                Text { text: "×"; color: root.textDim; font.pixelSize: 12 }
+                                Image { width: 14; height: 14; source: "qrc:/media/multiply.svg"; sourceSize: Qt.size(14, 14); anchors.verticalCenter: parent.verticalCenter }
                                 
                                 TextField {
                                     Layout.fillWidth: true
@@ -3183,11 +3243,12 @@ ApplicationWindow {
                                     border.color: vtfCheck.checked ? root.accent : root.inputBorder
                                     color: vtfCheck.checked ? root.accent : "transparent"
                                     
-                                    Text {
+                                    Image {
                                         anchors.centerIn: parent
-                                        text: "✓"
-                                        color: "white"
-                                        font.pixelSize: 10
+                                        width: 10
+                                        height: 10
+                                        source: "qrc:/media/check.svg"
+                                        sourceSize: Qt.size(10, 10)
                                         visible: vtfCheck.checked
                                     }
                                 }
@@ -3257,18 +3318,29 @@ ApplicationWindow {
                         // Add button
                         Rectangle {
                             id: vtfAddBtn
-                            Layout.preferredWidth: 70
+                            Layout.preferredWidth: 80
                             Layout.preferredHeight: 24
                             property bool btnHovered: false
                             color: btnHovered ? root.accentHover : root.accent
                             radius: 4
                             
-                            Text {
+                            RowLayout {
                                 anchors.centerIn: parent
-                                text: "+ Add"
-                                color: "white"
-                                font.pixelSize: 11
-                                font.bold: true
+                                spacing: 4
+                                
+                                Image {
+                                    width: 12
+                                    height: 12
+                                    source: "qrc:/media/plus.svg"
+                                    sourceSize: Qt.size(12, 12)
+                                }
+                                
+                                Text {
+                                    text: "Add"
+                                    color: "white"
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
                             }
                             
                             MouseArea {
@@ -3353,10 +3425,12 @@ ApplicationWindow {
                             visible: imageToVtfDialog.selectedImages.length === 0
                             spacing: 12
                             
-                            Text {
+                            Image {
                                 anchors.horizontalCenter: parent.horizontalCenter
-                                text: "📁"
-                                font.pixelSize: 40
+                                width: 40
+                                height: 40
+                                source: "qrc:/media/image.svg"
+                                sourceSize: Qt.size(40, 40)
                                 opacity: 0.5
                             }
                             
@@ -3431,15 +3505,35 @@ ApplicationWindow {
                                             elide: Text.ElideMiddle
                                         }
                                         
-                                        Text {
+                                        RowLayout {
                                             property string info: app.get_image_info(modelData)
-                                            text: {
-                                                if (info.startsWith("ERR:")) return ""
-                                                var parts = info.split("|")
-                                                return parts[0] + " × " + parts[1] + " px"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: 4
+                                    
+                                            Text {
+                                                text: {
+                                                    if (info.startsWith("ERR:")) return ""
+                                                    var parts = info.split("|")
+                                                    return parts[0]
+                                                }
+                                                color: root.textDim
+                                                font.pixelSize: 9
                                             }
-                                            color: root.textDim
-                                            font.pixelSize: 9
+                                            Image {
+                                                width: 12
+                                                height: 12
+                                                source: "qrc:/media/multiply.svg"
+                                                sourceSize: Qt.size(12, 12)
+                                            }
+                                            Text {
+                                                text: {
+                                                    if (info.startsWith("ERR:")) return ""
+                                                    var parts = info.split("|")
+                                                    return parts[1] + " px"
+                                                }
+                                                color: root.textDim
+                                                font.pixelSize: 9
+                                            }
                                         }
                                     }
                                     
@@ -3450,11 +3544,12 @@ ApplicationWindow {
                                         color: vtfRemoveBtn.containsMouse ? "#e74c3c" : "transparent"
                                         visible: vtfItemMouse.containsMouse
                                         
-                                        Text {
+                                        Image {
                                             anchors.centerIn: parent
-                                            text: "✕"
-                                            color: vtfRemoveBtn.containsMouse ? "white" : root.textDim
-                                            font.pixelSize: 10
+                                            width: 10
+                                            height: 10
+                                            source: "qrc:/media/close.svg"
+                                            sourceSize: Qt.size(10, 10)
                                         }
                                         
                                         MouseArea {
@@ -3536,7 +3631,7 @@ ApplicationWindow {
                         // Convert button
                         Rectangle {
                             id: vtfConvertBtn
-                            implicitWidth: 120
+                            implicitWidth: 140
                             implicitHeight: 32
                             property bool btnHovered: false
                             property bool btnEnabled: imageToVtfDialog.selectedImages.length > 0 && 
@@ -3546,12 +3641,24 @@ ApplicationWindow {
                             radius: 4
                             opacity: btnEnabled ? 1.0 : 0.5
                             
-                            Text {
+                            RowLayout {
                                 anchors.centerIn: parent
-                                text: imageToVtfDialog.isConverting ? "Converting..." : "Convert to VTF"
-                                color: "white"
-                                font.pixelSize: 12
-                                font.bold: true
+                                spacing: 6
+                                
+                                Image {
+                                    width: 14
+                                    height: 14
+                                    source: "qrc:/media/download.svg"
+                                    sourceSize: Qt.size(14, 14)
+                                    visible: !imageToVtfDialog.isConverting
+                                }
+                                
+                                Text {
+                                    text: imageToVtfDialog.isConverting ? "Converting..." : "Convert to VTF"
+                                    color: "white"
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                }
                             }
                             
                             MouseArea {
@@ -3595,7 +3702,7 @@ ApplicationWindow {
                                     imageToVtfDialog.isConverting = false
                                     
                                     if (successCount === imageToVtfDialog.selectedImages.length) {
-                                        root.showNotification("✓ Converted " + successCount + " images to VTF", "#4CAF50")
+                                        root.showNotification("Converted " + successCount + " images to VTF", "#4CAF50", "qrc:/media/check.svg")
                                         imageToVtfDialog.selectedImages = []
                                     } else {
                                         root.showNotification("Converted " + successCount + "/" + imageToVtfDialog.selectedImages.length + " images", "#FFA500")
@@ -4146,6 +4253,13 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 
+                Image {
+                    width: 20
+                    height: 20
+                    source: "qrc:/media/texture.svg"
+                    sourceSize: Qt.size(20, 20)
+                }
+                
                 Text {
                     text: globalTextureBrowser.openMode ? "Texture Browser - Open" : "Texture Browser - Select"
                     color: root.textColor
@@ -4169,10 +4283,11 @@ ApplicationWindow {
                         anchors.margins: 4
                         spacing: 8
                         
-                        Text {
-                            text: "🔍"
-                            color: root.textDim
-                            font.pixelSize: 14
+                        Image {
+                            width: 14
+                            height: 14
+                            source: "qrc:/media/search.svg"
+                            sourceSize: Qt.size(14, 14)
                         }
                         
                         TextField {
@@ -4196,11 +4311,13 @@ ApplicationWindow {
                         }
                         
                         // Clear button
-                        Text {
-                            text: "✕"
-                            color: clearSearchMouse.containsMouse ? root.textColor : root.textDim
-                            font.pixelSize: 12
+                        Image {
+                            width: 10
+                            height: 10
+                            source: "qrc:/media/close.svg"
+                            sourceSize: Qt.size(10, 10)
                             visible: searchField.text.length > 0
+                            opacity: clearSearchMouse.containsMouse ? 1.0 : 0.6
                             
                             MouseArea {
                                 id: clearSearchMouse
@@ -4221,11 +4338,12 @@ ApplicationWindow {
                     radius: 4
                     color: closeBrowserMouse.containsMouse ? "#c42b1c" : root.inputBg
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "×"
-                        color: root.textColor
-                        font.pixelSize: 18
+                        width: 14
+                        height: 14
+                        source: "qrc:/media/close.svg"
+                        sourceSize: Qt.size(14, 14)
                     }
                     
                     MouseArea {
@@ -4326,17 +4444,22 @@ ApplicationWindow {
                     }
                     
                     Rectangle {
-                        width: copyBtn.implicitWidth + 16
+                        width: copyBtn.implicitWidth + 20
                         height: 24
                         radius: 3
                         color: copyMouse.containsMouse ? root.accentHover : root.accent
                         
-                        Text {
-                            id: copyBtn
+                        RowLayout {
                             anchors.centerIn: parent
-                            text: "📋 Copy"
-                            color: "white"
-                            font.pixelSize: 11
+                            spacing: 6
+                            
+                            Image { width: 14; height: 14; source: "qrc:/media/clipboard.svg"; sourceSize: Qt.size(14, 14) }
+                            Text {
+                                id: copyBtn
+                                text: "Copy"
+                                color: "white"
+                                font.pixelSize: 11
+                            }
                         }
                         
                         MouseArea {

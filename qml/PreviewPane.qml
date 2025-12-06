@@ -16,8 +16,6 @@ Item {
     readonly property int animDurationNormal: 200
     readonly property int animDurationSlow: 300
     
-    // Note: Zoom is intentionally not animated - changes are applied instantly
-    
     // Colors
     readonly property color textColor: "#e0e0e0"
     readonly property color textDim: "#888888"
@@ -551,11 +549,12 @@ Item {
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: root.isAnimationPlaying ? "⏸" : "▶"
-                        color: root.isAnimationPlaying ? "#d4a857" : "#7cb87c"
-                        font.pixelSize: 14
+                        width: 12
+                        height: 12
+                        source: root.isAnimationPlaying ? "qrc:/media/close.svg" : "qrc:/media/play-solid.svg"
+                        sourceSize: Qt.size(12, 12)
                     }
                     
                     MouseArea {
@@ -850,12 +849,30 @@ Item {
             spacing: 8
             
             // LEFT SIDE: Texture info
-            Text {
-                text: textureProvider && textureProvider.is_loaded ?
-                      textureProvider.texture_width + " × " + textureProvider.texture_height : "No texture"
-                color: root.textColor
-                font.pixelSize: 13
-                font.family: "monospace"
+            RowLayout {
+                visible: textureProvider && textureProvider.is_loaded
+                spacing: 4
+                anchors.verticalCenter: parent.verticalCenter
+                
+                Text {
+                    text: textureProvider ? textureProvider.texture_width : ""
+                    color: root.textColor
+                    font.pixelSize: 13
+                    font.family: "monospace"
+                }
+                Image {
+                    width: 12
+                    height: 12
+                    source: "qrc:/media/multiply.svg"
+                    sourceSize: Qt.size(12, 12)
+                    opacity: 0.8
+                }
+                Text {
+                    text: textureProvider ? textureProvider.texture_height : ""
+                    color: root.textColor
+                    font.pixelSize: 13
+                    font.family: "monospace"
+                }
             }
             
             // Format badge
@@ -881,10 +898,11 @@ Item {
                 visible: textureProvider && textureProvider.mipmap_count > 1
                 spacing: 4
                 
-                Text {
-                    text: "Mip:"
-                    color: root.textDim
-                    font.pixelSize: 11
+                Image {
+                    width: 14
+                    height: 14
+                    source: "qrc:/media/layers.svg"
+                    sourceSize: Qt.size(14, 14)
                 }
                 
                 Rectangle {
@@ -899,11 +917,12 @@ Item {
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "◀"
-                        color: root.textColor
-                        font.pixelSize: 10
+                        width: 10
+                        height: 10
+                        source: "qrc:/media/arrow-left.svg"
+                        sourceSize: Qt.size(10, 10)
                     }
                     
                     MouseArea {
@@ -938,11 +957,12 @@ Item {
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "▶"
-                        color: root.textColor
-                        font.pixelSize: 10
+                        width: 10
+                        height: 10
+                        source: "qrc:/media/arrow-right.svg"
+                        sourceSize: Qt.size(10, 10)
                     }
                     
                     MouseArea {
@@ -979,12 +999,12 @@ Item {
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "−"
-                        color: root.textColor
-                        font.pixelSize: 18
-                        font.bold: true
+                        width: 14
+                        height: 14
+                        source: "qrc:/media/minus.svg"
+                        sourceSize: Qt.size(14, 14)
                     }
                     
                     MouseArea {
@@ -1039,12 +1059,12 @@ Item {
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "+"
-                        color: root.textColor
-                        font.pixelSize: 18
-                        font.bold: true
+                        width: 14
+                        height: 14
+                        source: "qrc:/media/plus.svg"
+                        sourceSize: Qt.size(14, 14)
                     }
                     
                     MouseArea {
@@ -1066,11 +1086,12 @@ Item {
                     radius: 4
                     color: fitMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
-                    Text {
+                    Image {
                         anchors.centerIn: parent
-                        text: "⊡"
-                        color: root.textColor
-                        font.pixelSize: 16
+                        width: 14
+                        height: 14
+                        source: "qrc:/media/fit-screen.svg"
+                        sourceSize: Qt.size(14, 14)
                     }
                     
                     MouseArea {
@@ -1148,11 +1169,22 @@ Item {
             }
             
             // Mipmap info
-            Text {
+            RowLayout {
                 visible: textureProvider && textureProvider.mipmap_count > 1
-                text: "Mip " + (textureProvider ? (textureProvider.current_mipmap + 1) + "/" + textureProvider.mipmap_count : "")
-                color: root.textDim
-                font.pixelSize: 11
+                spacing: 4
+                
+                Image {
+                    width: 12
+                    height: 12
+                    source: "qrc:/media/layers.svg"
+                    sourceSize: Qt.size(12, 12)
+                }
+                
+                Text {
+                    text: "Mip " + (textureProvider ? (textureProvider.current_mipmap + 1) + "/" + textureProvider.mipmap_count : "")
+                    color: root.textDim
+                    font.pixelSize: 11
+                }
             }
             
             // Alpha badge
@@ -1160,15 +1192,26 @@ Item {
                 visible: textureProvider && textureProvider.has_alpha
                 color: "#2d4a2d"
                 radius: 3
-                width: alphaText.width + 8
+                width: alphaRow.width + 10
                 height: 18
                 
-                Text {
-                    id: alphaText
+                RowLayout {
+                    id: alphaRow
                     anchors.centerIn: parent
-                    text: "Alpha"
-                    color: "#7cb87c"
-                    font.pixelSize: 10
+                    spacing: 4
+                    
+                    Image {
+                        width: 10
+                        height: 10
+                        source: "qrc:/media/eye.svg"
+                        sourceSize: Qt.size(10, 10)
+                    }
+                    
+                    Text {
+                        text: "Alpha"
+                        color: "#7cb87c"
+                        font.pixelSize: 10
+                    }
                 }
             }
             
@@ -1177,26 +1220,48 @@ Item {
                 visible: textureProvider && textureProvider.is_animated
                 color: "#4a3d2d"
                 radius: 3
-                width: animText.width + 8
+                width: animRow.width + 10
                 height: 18
                 
-                Text {
-                    id: animText
+                RowLayout {
+                    id: animRow
                     anchors.centerIn: parent
-                    text: "Animated"
-                    color: "#d4a857"
-                    font.pixelSize: 10
+                    spacing: 4
+                    
+                    Image {
+                        width: 10
+                        height: 10
+                        source: "qrc:/media/play.svg"
+                        sourceSize: Qt.size(10, 10)
+                    }
+                    
+                    Text {
+                        text: "Animated"
+                        color: "#d4a857"
+                        font.pixelSize: 10
+                    }
                 }
             }
             
             Item { Layout.fillWidth: true }
             
             // Color picker hint
-            Text {
-                text: "Right-click for color picker"
-                color: root.textDim
-                font.pixelSize: 10
+            RowLayout {
+                spacing: 4
                 opacity: 0.6
+                
+                Image {
+                    width: 12
+                    height: 12
+                    source: "qrc:/media/color-picker.svg"
+                    sourceSize: Qt.size(12, 12)
+                }
+                
+                Text {
+                    text: "Right-click for color picker"
+                    color: root.textDim
+                    font.pixelSize: 10
+                }
             }
             
             // Zoom percentage
@@ -1215,10 +1280,12 @@ Item {
         spacing: 12
         visible: !textureProvider || !textureProvider.is_loaded
         
-        Text {
+        Image {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: "📷"
-            font.pixelSize: 48
+            width: 48
+            height: 48
+            source: "qrc:/media/camera.svg"
+            sourceSize: Qt.size(48, 48)
             opacity: 0.3
         }
         
