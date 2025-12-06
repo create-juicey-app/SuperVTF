@@ -68,7 +68,7 @@ Item {
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     Behavior on border.color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    scale: enableCheckbox.pressed ? 0.9 : 1.0
+                    scale: enableCheckbox.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     
                     Text {
@@ -441,7 +441,7 @@ Item {
                 color: parsedColor
                 Behavior on color { ColorAnimation { duration: root.animDurationNormal } }
                 
-                scale: colorPreviewMouse.pressed ? 0.95 : (colorPreviewMouse.containsMouse ? 1.05 : 1.0)
+                scale: colorPreviewMouse.pressed ? 0.97 : 1.0
                 Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                 
                 MouseArea {
@@ -809,7 +809,7 @@ Item {
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     Behavior on border.color { ColorAnimation { duration: root.animDurationFast } }
                     
-                    scale: previewMouseArea.pressed ? 0.95 : (previewMouseArea.containsMouse ? 1.05 : 1.0)
+                    scale: previewMouseArea.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     
                     // Thumbnail source from texture provider
@@ -1089,7 +1089,7 @@ Item {
                         Behavior on border.color { ColorAnimation { duration: root.animDurationFast } }
                     }
                     
-                    scale: browseBtn.pressed ? 0.95 : 1.0
+                    scale: browseBtn.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     
                     contentItem: Text {

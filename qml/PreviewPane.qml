@@ -545,7 +545,7 @@ Item {
                     radius: 4
                     color: playPauseMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
-                    scale: playPauseMouse.pressed ? 0.92 : 1.0
+                    scale: playPauseMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -913,7 +913,7 @@ Item {
                     color: mipDownMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: mipDownMouse.pressed ? 0.92 : 1.0
+                    scale: mipDownMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -953,7 +953,7 @@ Item {
                     color: mipUpMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: mipUpMouse.pressed ? 0.92 : 1.0
+                    scale: mipUpMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -995,7 +995,7 @@ Item {
                     color: zoomOutMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: zoomOutMouse.pressed ? 0.9 : 1.0
+                    scale: zoomOutMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -1025,7 +1025,7 @@ Item {
                     color: zoomResetMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: zoomResetMouse.pressed ? 0.95 : 1.0
+                    scale: zoomResetMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -1055,7 +1055,7 @@ Item {
                     color: zoomInMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: zoomInMouse.pressed ? 0.9 : 1.0
+                    scale: zoomInMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -1087,7 +1087,7 @@ Item {
                     color: fitMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: fitMouse.pressed ? 0.92 : 1.0
+                    scale: fitMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -1116,7 +1116,7 @@ Item {
                     color: actualMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: actualMouse.pressed ? 0.92 : 1.0
+                    scale: actualMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     

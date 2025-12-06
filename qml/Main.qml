@@ -224,15 +224,86 @@ ApplicationWindow {
     }
     
     // ===== NATIVE FILE DIALOGS =====
+    
+    // Unified Open dialog for both VMT and VTF files
     FileDialog {
         id: openFileDialog
-        title: "Open VMT File"
-        nameFilters: ["VMT Files (*.vmt)", "All Files (*)"]
+        title: "Open File"
+        nameFilters: ["Source Files (*.vmt *.vtf)", "VMT Files (*.vmt)", "VTF Files (*.vtf)", "All Files (*)"]
         onAccepted: {
-            // Convert file:// URL to local path
             var path = root.urlToLocalPath(selectedFile)
-            console.log("Loading VMT file:", path)
+            root.openFile(path)
+        }
+    }
+    
+    // Function to open a file and try to find associated VMT/VTF
+    function openFile(path) {
+        var lowerPath = path.toLowerCase()
+        
+        if (lowerPath.endsWith(".vmt")) {
+            // Opening a VMT file
+            console.log("Opening VMT file:", path)
             materialModel.load_file(path)
+            
+            // Try to find and load associated VTF (base texture)
+            tryLoadAssociatedVtf(path)
+        } else if (lowerPath.endsWith(".vtf")) {
+            // Opening a VTF file
+            console.log("Opening VTF file:", path)
+            textureProvider.load_texture(path)
+            
+            // Try to find and load associated VMT
+            tryLoadAssociatedVmt(path)
+        } else {
+            // Unknown file type, try both
+            console.log("Unknown file type, trying both loaders:", path)
+            if (!materialModel.load_file(path)) {
+                textureProvider.load_texture(path)
+            }
+        }
+    }
+    
+    // Try to load associated VTF when opening a VMT
+    function tryLoadAssociatedVtf(vmtPath) {
+        // Wait a bit for the VMT to load and get $basetexture
+        Qt.callLater(function() {
+            if (materialModel.is_loaded) {
+                // Get the $basetexture parameter from the loaded material
+                var baseTexture = materialModel.get_parameter_value("$basetexture")
+                if (baseTexture && baseTexture.length > 0) {
+                    console.log("Found $basetexture:", baseTexture)
+                    // Try to load it via texture provider
+                    if (app.materials_root.length > 0) {
+                        textureProvider.load_from_material_path(baseTexture, app.materials_root)
+                    } else {
+                        // Try to find VTF in same directory as VMT
+                        var vtfPath = vmtPath.replace(/\.vmt$/i, ".vtf")
+                        textureProvider.load_texture(vtfPath)
+                    }
+                } else {
+                    // No $basetexture, try same filename with .vtf extension
+                    var vtfPath = vmtPath.replace(/\.vmt$/i, ".vtf")
+                    console.log("No $basetexture, trying:", vtfPath)
+                    textureProvider.load_texture(vtfPath)
+                }
+            }
+        })
+    }
+    
+    // Try to load associated VMT when opening a VTF
+    function tryLoadAssociatedVmt(vtfPath) {
+        // Try same filename with .vmt extension
+        var vmtPath = vtfPath.replace(/\.vtf$/i, ".vmt")
+        console.log("Trying to load associated VMT:", vmtPath)
+        
+        // Check if we're in a materials folder structure
+        var lowerPath = vtfPath.toLowerCase()
+        if (lowerPath.indexOf("/materials/") !== -1) {
+            // We're in a materials folder, VMT should be at same relative path
+            materialModel.load_file(vmtPath)
+        } else {
+            // Just try the direct .vmt replacement
+            materialModel.load_file(vmtPath)
         }
     }
     
@@ -247,6 +318,18 @@ ApplicationWindow {
         }
     }
     
+    // Legacy separate dialogs (kept for specific menu items)
+    FileDialog {
+        id: openVmtDialog
+        title: "Open VMT File"
+        nameFilters: ["VMT Files (*.vmt)", "All Files (*)"]
+        onAccepted: {
+            var path = root.urlToLocalPath(selectedFile)
+            materialModel.load_file(path)
+            tryLoadAssociatedVtf(path)
+        }
+    }
+    
     FileDialog {
         id: openVtfDialog
         title: "Open VTF Texture"
@@ -254,6 +337,7 @@ ApplicationWindow {
         onAccepted: {
             var path = root.urlToLocalPath(selectedFile)
             textureProvider.load_texture(path)
+            tryLoadAssociatedVmt(path)
         }
     }
     
@@ -290,8 +374,12 @@ ApplicationWindow {
         Menu {
             title: "File"
             Action { text: "New..."; onTriggered: newMaterialDialog.open() }
-            Action { text: "Open VMT..."; onTriggered: openFileDialog.open() }
-            Action { text: "Open VTF..."; onTriggered: openVtfDialog.open() }
+            Action { text: "Open..."; shortcut: "Ctrl+O"; onTriggered: openFileDialog.open() }
+            Menu {
+                title: "Open Specific"
+                Action { text: "Open VMT Only..."; onTriggered: openVmtDialog.open() }
+                Action { text: "Open VTF Only..."; onTriggered: openVtfDialog.open() }
+            }
             MenuSeparator {}
             Action { text: "Save"; enabled: materialModel.is_loaded; onTriggered: materialModel.save_file(materialModel.file_path) }
             Action { text: "Save As..."; enabled: materialModel.is_loaded; onTriggered: saveFileDialog.open() }
@@ -719,7 +807,7 @@ ApplicationWindow {
                                     sourceSize: Qt.size(10, 10)
                                     
                                     // Smooth rotation for expand/collapse icon
-                                    rotation: root.isCategoryCollapsed(section) ? 0 : 90
+                                    rotation: root.isCategoryCollapsed(section) ? 0 : -90
                                     Behavior on rotation { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                                 }
                                 
@@ -2037,7 +2125,7 @@ ApplicationWindow {
                         color: cancelNewMouse.containsMouse ? root.buttonHover : root.buttonBg
                         
                         // Smooth hover animation
-                        scale: cancelNewMouse.pressed ? 0.95 : 1.0
+                        scale: cancelNewMouse.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -2233,7 +2321,7 @@ ApplicationWindow {
                         color: cancelParamMouse.containsMouse ? root.buttonHover : root.buttonBg
                         
                         // Smooth hover animation
-                        scale: cancelParamMouse.pressed ? 0.95 : 1.0
+                        scale: cancelParamMouse.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -2650,7 +2738,7 @@ ApplicationWindow {
                             radius: 6
                             
                             // Smooth hover animations
-                            scale: gameMouseArea.pressed ? 0.98 : 1.0
+                            scale: gameMouseArea.pressed ? 0.97 : 1.0
                             Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             
@@ -2746,7 +2834,7 @@ ApplicationWindow {
                     radius: 6
                     
                     // Smooth hover animation
-                    scale: browseMouseArea.pressed ? 0.98 : 1.0
+                    scale: browseMouseArea.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -3054,7 +3142,7 @@ ApplicationWindow {
                         color: vtfCloseBtn.containsMouse ? root.buttonHover : "transparent"
                         
                         // Smooth hover animation
-                        scale: vtfCloseBtn.pressed ? 0.9 : 1.0
+                        scale: vtfCloseBtn.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -3658,7 +3746,7 @@ ApplicationWindow {
                             radius: 4
                             
                             // Smooth hover animation
-                            scale: vtfCancelBtnMouse.pressed ? 0.95 : 1.0
+                            scale: vtfCancelBtnMouse.pressed ? 0.97 : 1.0
                             Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             
@@ -4120,7 +4208,7 @@ ApplicationWindow {
                         color: cancelColorMouse.containsMouse ? root.buttonHover : root.buttonBg
                         
                         // Smooth hover animation
-                        scale: cancelColorMouse.pressed ? 0.95 : 1.0
+                        scale: cancelColorMouse.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -4407,7 +4495,7 @@ ApplicationWindow {
                     color: closeBrowserMouse.containsMouse ? "#c42b1c" : root.inputBg
                     
                     // Smooth hover animation
-                    scale: closeBrowserMouse.pressed ? 0.9 : 1.0
+                    scale: closeBrowserMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -4517,7 +4605,7 @@ ApplicationWindow {
                     }
                     
                     Rectangle {
-                        width: copyBtn.implicitWidth + 20
+                        width: copyBtn.implicitWidth + 28
                         height: 24
                         radius: 3
                         color: copyMouse.containsMouse ? root.accentHover : root.accent
@@ -4542,6 +4630,7 @@ ApplicationWindow {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
                                 // Copy to clipboard (we'd need to implement this in Rust)
+                                // TODO!!!!!
                                 console.log("Copy texture path: " + globalTextureBrowser.selectedTexture)
                             }
                         }
@@ -4887,7 +4976,7 @@ ApplicationWindow {
                     color: cancelMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
                     // Smooth hover animation
-                    scale: cancelMouse.pressed ? 0.95 : 1.0
+                    scale: cancelMouse.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
