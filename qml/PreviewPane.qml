@@ -1086,6 +1086,11 @@ Item {
                     radius: 4
                     color: fitMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
+                    // Smooth hover animation
+                    scale: fitMouse.pressed ? 0.92 : 1.0
+                    Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: root.animDurationFast } }
+                    
                     Image {
                         anchors.centerIn: parent
                         width: 14
@@ -1109,6 +1114,11 @@ Item {
                     height: 28
                     radius: 4
                     color: actualMouse.containsMouse ? root.buttonHover : root.buttonBg
+                    
+                    // Smooth hover animation
+                    scale: actualMouse.pressed ? 0.92 : 1.0
+                    Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: Easing.OutCubic } }
+                    Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
                     Text {
                         anchors.centerIn: parent

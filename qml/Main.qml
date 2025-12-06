@@ -2062,10 +2062,10 @@ ApplicationWindow {
                         width: 90
                         height: 32
                         radius: 4
-                        color: okNewMouse.containsMouse ? "#1177bb" : root.accent
+                        color: okNewMouse.containsMouse ? root.accentHover : root.accent
                         
-                        // Smooth hover animation
-                        scale: okNewMouse.pressed ? 0.95 : (okNewMouse.containsMouse ? 1.03 : 1.0)
+                        // Smooth hover animation (scale down on press only)
+                        scale: okNewMouse.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -2226,10 +2226,16 @@ ApplicationWindow {
                     spacing: 12
                     
                     Rectangle {
+                        id: cancelParamBtn
                         width: 90
                         height: 32
                         radius: 4
                         color: cancelParamMouse.containsMouse ? root.buttonHover : root.buttonBg
+                        
+                        // Smooth hover animation
+                        scale: cancelParamMouse.pressed ? 0.95 : 1.0
+                        Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                        Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
                         Text {
                             anchors.centerIn: parent
@@ -2248,14 +2254,20 @@ ApplicationWindow {
                     }
                     
                     Rectangle {
+                        id: okParamBtn
                         width: 90
                         height: 32
                         radius: 4
-                        color: okParamMouse.containsMouse ? "#1177bb" : root.accent
+                        color: okParamMouse.containsMouse ? root.accentHover : root.accent
+                        
+                        // Smooth hover animation (scale down on press only)
+                        scale: okParamMouse.pressed ? 0.97 : 1.0
+                        Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                        Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
                         Text {
                             anchors.centerIn: parent
-                            text: "OK"
+                            text: "Add"
                             color: "white"
                             font.pixelSize: 13
                             font.bold: true
@@ -2288,6 +2300,20 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: 420
         padding: 0
+        
+        // Smooth enter/exit animations
+        enter: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: root.animDurationNormal; easing.type: root.animEasing }
+                NumberAnimation { property: "scale"; from: 0.9; to: 1; duration: root.animDurationNormal; easing.type: root.animEasingBounce }
+            }
+        }
+        exit: Transition {
+            ParallelAnimation {
+                NumberAnimation { property: "opacity"; from: 1; to: 0; duration: root.animDurationFast; easing.type: Easing.InCubic }
+                NumberAnimation { property: "scale"; from: 1; to: 0.95; duration: root.animDurationFast; easing.type: Easing.InCubic }
+            }
+        }
         
         background: Rectangle {
             color: root.panelBg
@@ -2432,11 +2458,17 @@ ApplicationWindow {
                 }
                 
                 Rectangle {
+                    id: closeAboutBtn
                     anchors.centerIn: parent
-                    width: 100
+                    width: 90
                     height: 32
-                    radius: 6
-                    color: closeAboutMouse.containsMouse ? "#1177bb" : root.accent
+                    radius: 4
+                    color: closeAboutMouse.containsMouse ? root.accentHover : root.accent
+                    
+                    // Smooth hover animation (scale down on press only)
+                    scale: closeAboutMouse.pressed ? 0.97 : 1.0
+                    Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                    Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
                     Text {
                         anchors.centerIn: parent
@@ -2558,14 +2590,6 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 8
-                    
-                    Image {
-                        Layout.alignment: Qt.AlignHCenter
-                        width: 32
-                        height: 32
-                        source: "qrc:/media/settings.svg"
-                        sourceSize: Qt.size(32, 32)
-                    }
                     
                     Text {
                         Layout.alignment: Qt.AlignHCenter
@@ -2714,11 +2738,17 @@ ApplicationWindow {
                 
                 // Or browse manually
                 Rectangle {
+                    id: browseManuallyBtn
                     Layout.fillWidth: true
                     Layout.preferredHeight: 52
                     color: browseMouseArea.containsMouse ? root.buttonHover : root.inputBg
                     border.color: root.inputBorder
                     radius: 6
+                    
+                    // Smooth hover animation
+                    scale: browseMouseArea.pressed ? 0.98 : 1.0
+                    Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                    Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
                     RowLayout {
                         anchors.fill: parent
@@ -2820,8 +2850,8 @@ ApplicationWindow {
                             welcomeDialog.close()
                         }
                         
-                        // Smooth hover animation
-                        scale: hovered ? 1.02 : (pressed ? 0.98 : 1.0)
+                        // Smooth hover animation (scale down on press only)
+                        scale: pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         
                         contentItem: Text {
@@ -2833,8 +2863,10 @@ ApplicationWindow {
                         }
                         
                         background: Rectangle {
+                            implicitWidth: 100
+                            implicitHeight: 32
                             color: skipButton.hovered ? root.buttonHover : "transparent"
-                            radius: 6
+                            radius: 4
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         }
                     }
@@ -2855,8 +2887,8 @@ ApplicationWindow {
                             }
                         }
                         
-                        // Smooth hover animation
-                        scale: hovered ? 1.03 : (pressed ? 0.97 : 1.0)
+                        // Smooth hover animation (scale down on press only)
+                        scale: pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         
                         contentItem: Row {
@@ -2909,10 +2941,12 @@ ApplicationWindow {
                         }
                         
                         background: Rectangle {
+                            implicitWidth: 100
+                            implicitHeight: 32
                             color: continueButton.enabled 
                                 ? (continueButton.hovered ? root.accentHover : root.accent)
                                 : root.buttonBg
-                            radius: 6
+                            radius: 4
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         }
                     }
@@ -3018,6 +3052,11 @@ ApplicationWindow {
                         height: 28
                         radius: 14
                         color: vtfCloseBtn.containsMouse ? root.buttonHover : "transparent"
+                        
+                        // Smooth hover animation
+                        scale: vtfCloseBtn.pressed ? 0.9 : 1.0
+                        Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                        Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
                         Image {
                             anchors.centerIn: parent
@@ -3318,11 +3357,15 @@ ApplicationWindow {
                         // Add button
                         Rectangle {
                             id: vtfAddBtn
-                            Layout.preferredWidth: 80
-                            Layout.preferredHeight: 24
-                            property bool btnHovered: false
-                            color: btnHovered ? root.accentHover : root.accent
+                            Layout.preferredWidth: 70
+                            Layout.preferredHeight: 26
+                            color: vtfAddBtnMouse.containsMouse ? root.accentHover : root.accent
                             radius: 4
+                            
+                            // Smooth hover animation (scale down on press only)
+                            scale: vtfAddBtnMouse.pressed ? 0.97 : 1.0
+                            Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                            Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             
                             RowLayout {
                                 anchors.centerIn: parent
@@ -3344,10 +3387,10 @@ ApplicationWindow {
                             }
                             
                             MouseArea {
+                                id: vtfAddBtnMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onContainsMouseChanged: vtfAddBtn.btnHovered = containsMouse
                                 onClicked: addImageDialog.open()
                             }
                         }
@@ -3356,11 +3399,15 @@ ApplicationWindow {
                         Rectangle {
                             id: vtfClearBtn
                             Layout.preferredWidth: 60
-                            Layout.preferredHeight: 24
+                            Layout.preferredHeight: 26
                             visible: imageToVtfDialog.selectedImages.length > 0
-                            property bool btnHovered: false
-                            color: btnHovered ? "#c0392b" : "#e74c3c"
+                            color: vtfClearBtnMouse.containsMouse ? "#c0392b" : "#e74c3c"
                             radius: 4
+                            
+                            // Smooth hover animation (scale down on press only)
+                            scale: vtfClearBtnMouse.pressed ? 0.97 : 1.0
+                            Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                            Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             
                             Text {
                                 anchors.centerIn: parent
@@ -3371,10 +3418,10 @@ ApplicationWindow {
                             }
                             
                             MouseArea {
+                                id: vtfClearBtnMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onContainsMouseChanged: vtfClearBtn.btnHovered = containsMouse
                                 onClicked: imageToVtfDialog.selectedImages = []
                             }
                         }
@@ -3598,32 +3645,35 @@ ApplicationWindow {
                     // Action buttons
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: 12
                         
                         Item { Layout.fillWidth: true }
                         
                         // Cancel button
                         Rectangle {
                             id: vtfCancelBtn
-                            implicitWidth: 80
-                            implicitHeight: 32
-                            property bool btnHovered: false
-                            color: btnHovered ? root.buttonHover : root.buttonBg
-                            border.color: root.inputBorder
+                            width: 90
+                            height: 32
+                            color: vtfCancelBtnMouse.containsMouse ? root.buttonHover : root.buttonBg
                             radius: 4
+                            
+                            // Smooth hover animation
+                            scale: vtfCancelBtnMouse.pressed ? 0.95 : 1.0
+                            Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                            Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             
                             Text {
                                 anchors.centerIn: parent
                                 text: "Cancel"
                                 color: root.textColor
-                                font.pixelSize: 12
+                                font.pixelSize: 13
                             }
                             
                             MouseArea {
+                                id: vtfCancelBtnMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onContainsMouseChanged: vtfCancelBtn.btnHovered = containsMouse
                                 onClicked: imageToVtfDialog.close()
                             }
                         }
@@ -3631,15 +3681,20 @@ ApplicationWindow {
                         // Convert button
                         Rectangle {
                             id: vtfConvertBtn
-                            implicitWidth: 140
-                            implicitHeight: 32
-                            property bool btnHovered: false
+                            width: 130
+                            height: 32
                             property bool btnEnabled: imageToVtfDialog.selectedImages.length > 0 && 
                                      imageToVtfDialog.outputDirectory.length > 0 &&
                                      !imageToVtfDialog.isConverting
-                            color: !btnEnabled ? root.buttonBg : (btnHovered ? root.accentHover : root.accent)
+                            color: !btnEnabled ? root.buttonBg : (vtfConvertBtnMouse.containsMouse ? root.accentHover : root.accent)
                             radius: 4
                             opacity: btnEnabled ? 1.0 : 0.5
+                            
+                            // Smooth hover animation (scale down on press only)
+                            scale: vtfConvertBtnMouse.pressed && btnEnabled ? 0.97 : 1.0
+                            Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                            Behavior on color { ColorAnimation { duration: root.animDurationFast } }
+                            Behavior on opacity { NumberAnimation { duration: root.animDurationFast } }
                             
                             RowLayout {
                                 anchors.centerIn: parent
@@ -3656,17 +3711,17 @@ ApplicationWindow {
                                 Text {
                                     text: imageToVtfDialog.isConverting ? "Converting..." : "Convert to VTF"
                                     color: "white"
-                                    font.pixelSize: 12
+                                    font.pixelSize: 13
                                     font.bold: true
                                 }
                             }
                             
                             MouseArea {
+                                id: vtfConvertBtnMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: vtfConvertBtn.btnEnabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                 enabled: vtfConvertBtn.btnEnabled
-                                onContainsMouseChanged: vtfConvertBtn.btnHovered = containsMouse
                             
                                 onClicked: {
                                     imageToVtfDialog.isConverting = true
@@ -4058,16 +4113,22 @@ ApplicationWindow {
                     spacing: 12
                     
                     Rectangle {
-                        width: 80
-                        height: 30
+                        id: cancelColorBtn
+                        width: 90
+                        height: 32
                         radius: 4
                         color: cancelColorMouse.containsMouse ? root.buttonHover : root.buttonBg
+                        
+                        // Smooth hover animation
+                        scale: cancelColorMouse.pressed ? 0.95 : 1.0
+                        Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                        Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
                         Text {
                             anchors.centerIn: parent
                             text: "Cancel"
                             color: root.textColor
-                            font.pixelSize: 12
+                            font.pixelSize: 13
                         }
                         
                         MouseArea {
@@ -4080,16 +4141,22 @@ ApplicationWindow {
                     }
                     
                     Rectangle {
-                        width: 80
-                        height: 30
+                        id: okColorBtn
+                        width: 90
+                        height: 32
                         radius: 4
                         color: okColorMouse.containsMouse ? root.accentHover : root.accent
                         
+                        // Smooth hover animation (scale down on press only)
+                        scale: okColorMouse.pressed ? 0.97 : 1.0
+                        Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                        Behavior on color { ColorAnimation { duration: root.animDurationFast } }
+                        
                         Text {
                             anchors.centerIn: parent
-                            text: "OK"
+                            text: "Apply"
                             color: "white"
-                            font.pixelSize: 12
+                            font.pixelSize: 13
                             font.bold: true
                         }
                         
@@ -4333,10 +4400,16 @@ ApplicationWindow {
                 
                 // Close button
                 Rectangle {
+                    id: closeBrowserBtn
                     Layout.preferredWidth: 32
                     Layout.preferredHeight: 32
                     radius: 4
                     color: closeBrowserMouse.containsMouse ? "#c42b1c" : root.inputBg
+                    
+                    // Smooth hover animation
+                    scale: closeBrowserMouse.pressed ? 0.9 : 1.0
+                    Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                    Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
                     Image {
                         anchors.centerIn: parent
@@ -4373,8 +4446,8 @@ ApplicationWindow {
                         border.color: globalTextureBrowser.selectedCategory === modelData ? root.accent : root.inputBorder
                         border.width: 1
                         
-                        // Smooth hover animations
-                        scale: categoryMouse.pressed ? 0.95 : (categoryMouse.containsMouse ? 1.02 : 1.0)
+                        // Smooth hover animations (scale down on press only)
+                        scale: categoryMouse.pressed ? 0.97 : 1.0
                         Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                         Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                         
@@ -4499,9 +4572,7 @@ ApplicationWindow {
                             border.width: globalTextureBrowser.selectedTexture === modelData.path ? 2 : 1
                             radius: 6
                             
-                            // Smooth hover animations
-                            scale: gridItemMouse.containsMouse ? 1.02 : 1.0
-                            Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
+                            // Smooth hover animations (no scale up)
                             Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                             Behavior on border.color { ColorAnimation { duration: root.animDurationFast } }
                             
@@ -4810,8 +4881,8 @@ ApplicationWindow {
                 
                 Rectangle {
                     id: cancelBtn
-                    width: 80
-                    height: 30
+                    width: 90
+                    height: 32
                     radius: 4
                     color: cancelMouse.containsMouse ? root.buttonHover : root.buttonBg
                     
@@ -4824,7 +4895,7 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         text: "Cancel"
                         color: root.textColor
-                        font.pixelSize: 12
+                        font.pixelSize: 13
                     }
                     
                     MouseArea {
@@ -4838,14 +4909,14 @@ ApplicationWindow {
                 
                 Rectangle {
                     id: selectBtn
-                    width: 80
-                    height: 30
+                    width: 90
+                    height: 32
                     radius: 4
                     color: selectMouse.containsMouse ? root.accentHover : root.accent
                     opacity: globalTextureBrowser.selectedTexture ? 1.0 : 0.5
                     
-                    // Smooth hover animation
-                    scale: selectMouse.pressed ? 0.95 : (selectMouse.containsMouse && globalTextureBrowser.selectedTexture ? 1.03 : 1.0)
+                    // Smooth hover animation (scale down on press only)
+                    scale: selectMouse.pressed && globalTextureBrowser.selectedTexture ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: root.animDurationFast; easing.type: root.animEasing } }
                     Behavior on color { ColorAnimation { duration: root.animDurationFast } }
                     
@@ -4853,7 +4924,7 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         text: globalTextureBrowser.openMode ? "Open" : "Select"
                         color: "white"
-                        font.pixelSize: 12
+                        font.pixelSize: 13
                         font.bold: true
                     }
                     
