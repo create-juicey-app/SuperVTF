@@ -155,6 +155,14 @@ Item {
         // Disable pan animation after a short delay
         panAnimDisableTimer.restart()
     }
+    function setActualSize() {
+        // Set zoom to 1:1 (100%)
+        imageArea.animatePan = true
+        zoom = 1.0
+        imageArea.panX = 0
+        imageArea.panY = 0
+        panAnimDisableTimer.restart()
+    }
     function fitToView() {
         if (!textureProvider || !textureProvider.is_loaded) return
         imageArea.animatePan = true

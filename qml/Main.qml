@@ -341,7 +341,31 @@ ApplicationWindow {
         }
     }
     
+    // ===== SHORTCUT DISPLAY MAP =====
+    // Maps menu item text to shortcut display string
+    property var shortcutMap: ({
+        "New...": "Ctrl+N",
+        "Open...": "Ctrl+O",
+        "Save": "Ctrl+S",
+        "Save As...": "Ctrl+Shift+S",
+        "Exit": "Ctrl+Q",
+        "Zoom In": "Ctrl+=",
+        "Zoom Out": "Ctrl+-",
+        "Reset Zoom": "Ctrl+0",
+        "Fit to View": "Ctrl+1",
+        "Actual Size (1:1)": "Ctrl+2",
+        "Texture Browser...": "Ctrl+T",
+        "Image to VTF Converter...": "Ctrl+I",
+        "Select Game...": "Ctrl+G",
+        "About VFileX": "F1"
+    })
+    
+    function getShortcutFor(text) {
+        return shortcutMap[text] || ""
+    }
+    
     // ===== GLOBAL SHORTCUTS =====
+    // Note: Shortcuts defined here only, not in menu Actions (to avoid double-trigger)
     Shortcut { sequence: "Ctrl+N"; onActivated: newMaterialDialog.open() }
     Shortcut { sequence: "Ctrl+O"; onActivated: openFileDialog.open() }
     Shortcut { sequence: "Ctrl+S"; onActivated: if (materialModel.is_loaded) materialModel.save_file(materialModel.file_path) }
@@ -351,6 +375,11 @@ ApplicationWindow {
     Shortcut { sequence: "Ctrl+-"; onActivated: previewPane.zoomOut() }
     Shortcut { sequence: "Ctrl+0"; onActivated: previewPane.resetZoom() }
     Shortcut { sequence: "Ctrl+1"; onActivated: previewPane.fitToView() }
+    Shortcut { sequence: "Ctrl+2"; onActivated: previewPane.setActualSize() }
+    Shortcut { sequence: "Ctrl+T"; onActivated: { globalTextureBrowser.openMode = true; globalTextureBrowser.targetTextField = null; globalTextureBrowser.open() } }
+    Shortcut { sequence: "Ctrl+I"; onActivated: imageToVtfDialog.open() }
+    Shortcut { sequence: "Ctrl+G"; onActivated: { welcomeDialog.loadDetectedGames(); welcomeDialog.selectedIndex = -1; welcomeDialog.open() } }
+    Shortcut { sequence: "F1"; onActivated: aboutDialog.open() }
     
     // ===== MENU BAR =====
     menuBar: MenuBar {
@@ -359,7 +388,7 @@ ApplicationWindow {
         delegate: MenuBarItem {
             id: menuBarItem
             contentItem: Text {
-                text: menuBarItem.text
+                text: menuBarItem.text.replace("&", "")  // Fucks up Qt handles mnemonic, i don't know why QT does that--
                 font: menuBarItem.font
                 color: root.textColor
                 horizontalAlignment: Text.AlignLeft
@@ -372,33 +401,225 @@ ApplicationWindow {
         }
         
         Menu {
-            title: "File"
-            Action { text: "New..."; onTriggered: newMaterialDialog.open() }
-            Action { text: "Open..."; shortcut: "Ctrl+O"; onTriggered: openFileDialog.open() }
+            title: "&File"
+            
+            // Dark menu styling
+            delegate: MenuItem {
+                id: fileMenuItem
+                contentItem: RowLayout {
+                    spacing: 8
+                    Image {
+                        source: fileMenuItem.icon.source
+                        sourceSize: Qt.size(16, 16)
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        visible: fileMenuItem.icon.source != ""
+                    }
+                    Text {
+                        text: fileMenuItem.text
+                        color: fileMenuItem.enabled ? root.textColor : root.textDim
+                        font: fileMenuItem.font
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.getShortcutFor(fileMenuItem.text)
+                        color: root.textDim
+                        font.pixelSize: 11
+                        visible: text !== ""
+                    }
+                }
+                background: Rectangle {
+                    color: fileMenuItem.highlighted ? root.accent : "transparent"
+                    radius: 4
+                }
+            }
+            background: Rectangle {
+                color: root.panelBg
+                border.color: root.panelBorder
+                radius: 6
+            }
+            
+            Action { 
+                text: "New..."
+                icon.source: "qrc:/media/file-new.svg"
+                onTriggered: newMaterialDialog.open() 
+            }
+            Action { 
+                text: "Open..."
+                icon.source: "qrc:/media/file-open.svg"
+                onTriggered: openFileDialog.open() 
+            }
             Menu {
                 title: "Open Specific"
-                Action { text: "Open VMT Only..."; onTriggered: openVmtDialog.open() }
-                Action { text: "Open VTF Only..."; onTriggered: openVtfDialog.open() }
+                
+                delegate: MenuItem {
+                    id: openSpecificMenuItem
+                    contentItem: RowLayout {
+                        spacing: 8
+                        Image {
+                            source: openSpecificMenuItem.icon.source
+                            sourceSize: Qt.size(16, 16)
+                            Layout.preferredWidth: 16
+                            Layout.preferredHeight: 16
+                            visible: openSpecificMenuItem.icon.source != ""
+                        }
+                        Text {
+                            text: openSpecificMenuItem.text
+                            color: root.textColor
+                            font: openSpecificMenuItem.font
+                            Layout.fillWidth: true
+                        }
+                    }
+                    background: Rectangle {
+                        color: openSpecificMenuItem.highlighted ? root.accent : "transparent"
+                        radius: 4
+                    }
+                }
+                background: Rectangle {
+                    color: root.panelBg
+                    border.color: root.panelBorder
+                    radius: 6
+                }
+                
+                Action { 
+                    text: "Open VMT Only..."
+                    icon.source: "qrc:/media/file-open.svg"
+                    onTriggered: openVmtDialog.open() 
+                }
+                Action { 
+                    text: "Open VTF Only..."
+                    icon.source: "qrc:/media/image.svg"
+                    onTriggered: openVtfDialog.open() 
+                }
             }
             MenuSeparator {}
-            Action { text: "Save"; enabled: materialModel.is_loaded; onTriggered: materialModel.save_file(materialModel.file_path) }
-            Action { text: "Save As..."; enabled: materialModel.is_loaded; onTriggered: saveFileDialog.open() }
+            Action { 
+                text: "Save"
+                icon.source: "qrc:/media/save.svg"
+                enabled: materialModel.is_loaded
+                onTriggered: materialModel.save_file(materialModel.file_path) 
+            }
+            Action { 
+                text: "Save As..."
+                icon.source: "qrc:/media/save-as.svg"
+                enabled: materialModel.is_loaded
+                onTriggered: saveFileDialog.open() 
+            }
             MenuSeparator {}
-            Action { text: "Exit"; onTriggered: Qt.quit() }
+            Action { 
+                text: "Exit"
+                icon.source: "qrc:/media/close.svg"
+                onTriggered: Qt.quit() 
+            }
         }
         
         Menu {
-            title: "View"
-            Action { text: "Zoom In"; onTriggered: previewPane.zoomIn() }
-            Action { text: "Zoom Out"; onTriggered: previewPane.zoomOut() }
-            Action { text: "Reset Zoom"; onTriggered: previewPane.resetZoom() }
-            Action { text: "Fit to View"; onTriggered: previewPane.fitToView() }
+            title: "&View"
+            
+            delegate: MenuItem {
+                id: viewMenuItem
+                contentItem: RowLayout {
+                    spacing: 8
+                    Image {
+                        source: viewMenuItem.icon.source
+                        sourceSize: Qt.size(16, 16)
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        visible: viewMenuItem.icon.source != ""
+                    }
+                    Text {
+                        text: viewMenuItem.text
+                        color: viewMenuItem.enabled ? root.textColor : root.textDim
+                        font: viewMenuItem.font
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.getShortcutFor(viewMenuItem.text)
+                        color: root.textDim
+                        font.pixelSize: 11
+                        visible: text !== ""
+                    }
+                }
+                background: Rectangle {
+                    color: viewMenuItem.highlighted ? root.accent : "transparent"
+                    radius: 4
+                }
+            }
+            background: Rectangle {
+                color: root.panelBg
+                border.color: root.panelBorder
+                radius: 6
+            }
+            
+            Action { 
+                text: "Zoom In"
+                icon.source: "qrc:/media/plus.svg"
+                onTriggered: previewPane.zoomIn() 
+            }
+            Action { 
+                text: "Zoom Out"
+                icon.source: "qrc:/media/minus.svg"
+                onTriggered: previewPane.zoomOut() 
+            }
+            Action { 
+                text: "Reset Zoom"
+                icon.source: "qrc:/media/refresh.svg"
+                onTriggered: previewPane.resetZoom() 
+            }
+            Action { 
+                text: "Fit to View"
+                icon.source: "qrc:/media/fit-screen.svg"
+                onTriggered: previewPane.fitToView() 
+            }
+            MenuSeparator {}
+            Action {
+                text: "Actual Size (1:1)"
+                icon.source: "qrc:/media/layers.svg"
+                onTriggered: previewPane.setActualSize()
+            }
         }
         
         Menu {
-            title: "Tools"
+            title: "&Tools"
+            
+            delegate: MenuItem {
+                id: toolsMenuItem
+                contentItem: RowLayout {
+                    spacing: 8
+                    Image {
+                        source: toolsMenuItem.icon.source
+                        sourceSize: Qt.size(16, 16)
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        visible: toolsMenuItem.icon.source != ""
+                    }
+                    Text {
+                        text: toolsMenuItem.text
+                        color: toolsMenuItem.enabled ? root.textColor : root.textDim
+                        font: toolsMenuItem.font
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.getShortcutFor(toolsMenuItem.text)
+                        color: root.textDim
+                        font.pixelSize: 11
+                        visible: text !== ""
+                    }
+                }
+                background: Rectangle {
+                    color: toolsMenuItem.highlighted ? root.accent : "transparent"
+                    radius: 4
+                }
+            }
+            background: Rectangle {
+                color: root.panelBg
+                border.color: root.panelBorder
+                radius: 6
+            }
+            
             Action { 
                 text: "Texture Browser..."
+                icon.source: "qrc:/media/texture.svg"
                 onTriggered: {
                     globalTextureBrowser.openMode = true
                     globalTextureBrowser.targetTextField = null
@@ -408,14 +629,52 @@ ApplicationWindow {
             MenuSeparator {}
             Action {
                 text: "Image to VTF Converter..."
+                icon.source: "qrc:/media/image.svg"
                 onTriggered: imageToVtfDialog.open()
             }
         }
         
         Menu {
-            title: "Settings"
+            title: "&Settings"
+            
+            delegate: MenuItem {
+                id: settingsMenuItem
+                contentItem: RowLayout {
+                    spacing: 8
+                    Image {
+                        source: settingsMenuItem.icon.source
+                        sourceSize: Qt.size(16, 16)
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        visible: settingsMenuItem.icon.source != ""
+                    }
+                    Text {
+                        text: settingsMenuItem.text
+                        color: settingsMenuItem.enabled ? root.textColor : root.textDim
+                        font: settingsMenuItem.font
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.getShortcutFor(settingsMenuItem.text)
+                        color: root.textDim
+                        font.pixelSize: 11
+                        visible: text !== ""
+                    }
+                }
+                background: Rectangle {
+                    color: settingsMenuItem.highlighted ? root.accent : "transparent"
+                    radius: 4
+                }
+            }
+            background: Rectangle {
+                color: root.panelBg
+                border.color: root.panelBorder
+                radius: 6
+            }
+            
             Action { 
                 text: "Select Game..."
+                icon.source: "qrc:/media/gamepad.svg"
                 onTriggered: {
                     welcomeDialog.loadDetectedGames()
                     welcomeDialog.selectedIndex = -1
@@ -424,6 +683,7 @@ ApplicationWindow {
             }
             Action {
                 text: "Browse Materials Folder..."
+                icon.source: "qrc:/media/folder.svg"
                 onTriggered: {
                     var path = app.browse_folder_native("Select Materials Folder")
                     if (path.length > 0) {
@@ -432,15 +692,56 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
-            Menu {
-                title: "Current: " + (app.selected_game || "Not Set")
+            Action {
+                text: "Current: " + (app.selected_game || "Not Set")
+                icon.source: "qrc:/media/info.svg"
                 enabled: false
             }
         }
         
         Menu {
-            title: "Help"
-            Action { text: "About VFileX"; onTriggered: aboutDialog.open() }
+            title: "&Help"
+            
+            delegate: MenuItem {
+                id: helpMenuItem
+                contentItem: RowLayout {
+                    spacing: 8
+                    Image {
+                        source: helpMenuItem.icon.source
+                        sourceSize: Qt.size(16, 16)
+                        Layout.preferredWidth: 16
+                        Layout.preferredHeight: 16
+                        visible: helpMenuItem.icon.source != ""
+                    }
+                    Text {
+                        text: helpMenuItem.text
+                        color: helpMenuItem.enabled ? root.textColor : root.textDim
+                        font: helpMenuItem.font
+                        Layout.fillWidth: true
+                    }
+                    Text {
+                        text: root.getShortcutFor(helpMenuItem.text)
+                        color: root.textDim
+                        font.pixelSize: 11
+                        visible: text !== ""
+                    }
+                }
+                background: Rectangle {
+                    color: helpMenuItem.highlighted ? root.accent : "transparent"
+                    radius: 4
+                }
+            }
+            background: Rectangle {
+                color: root.panelBg
+                border.color: root.panelBorder
+                radius: 6
+            }
+            
+            Action { 
+                text: "About VFileX"
+                icon.source: "qrc:/media/help.svg"
+                onTriggered: aboutDialog.open() 
+            }
         }
     }
     
@@ -2461,7 +2762,7 @@ ApplicationWindow {
                         }
                         
                         Text {
-                            text: "Version 0.8.0"
+                            text: "Version 0.8.2"
                             color: "#88ccff"
                             font.pixelSize: 12
                         }
